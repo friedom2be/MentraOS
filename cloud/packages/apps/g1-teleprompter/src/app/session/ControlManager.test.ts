@@ -89,13 +89,13 @@ describe('ControlManager', () => {
     await control.apply('advance_chunk');
     expect(state.playback?.status).toBe('paused');
     expect(state.playback?.chunkIndex).toBe(2);
-    expect(timers.pendingCount()).toBe(0);
+    expect(timers.pendingCount()).toBe(1);
 
     timers.runPending();
 
-    expect(state.playback?.status).toBe('paused');
+    expect(state.playback?.status).toBe('playing');
     expect(state.playback?.chunkIndex).toBe(2);
-    expect(timers.pendingCount()).toBe(0);
+    expect(timers.pendingCount()).toBe(1);
   });
 
   test('manual advance on the final chunk pauses cleanly without arming timers', async () => {
@@ -122,6 +122,7 @@ describe('ControlManager', () => {
     expect(state.playback?.status).toBe('paused');
     expect(state.playback?.chunkIndex).toBe(1);
     expect(display.cleared).toBe(false);
+    expect(display.lastShown?.durationMs).toBeUndefined();
     expect(timers.pendingCount()).toBe(0);
   });
 
@@ -148,6 +149,31 @@ describe('ControlManager', () => {
     expect(display.lastShown?.text).toBe('one two three four five six');
     expect(display.lastShown?.durationMs).toBe(6000);
     expect(timers.pendingCount()).toBe(1);
+  });
+
+  test('paused external state keeps the HUD visible without a timeout', async () => {
+    const timers = installFakeTimers();
+    const state = createFakeState({
+      playback: {
+        chapterIndex: 0,
+        chunkIndex: 0,
+        scrollSpeed: 60,
+        status: 'paused',
+      },
+      activeScript: createScript({
+        chunks: ['one two three four five six'],
+        chapterList: [{title: 'Full Script', startChunkIndex: 0, endChunkIndex: 0}],
+      }),
+    });
+    const display = createDisplaySpy();
+
+    const control = new ControlManager(state as never, display as never, createLogger() as never);
+
+    control.handleExternalStateChange();
+
+    expect(display.lastShown?.text).toBe('one two three four five six');
+    expect(display.lastShown?.durationMs).toBeUndefined();
+    expect(timers.pendingCount()).toBe(0);
   });
 });
 

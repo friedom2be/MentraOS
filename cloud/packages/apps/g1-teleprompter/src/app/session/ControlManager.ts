@@ -69,6 +69,7 @@ export class ControlManager {
   }
 
   private async advanceChunk(pauseForInteraction: boolean): Promise<boolean> {
+    const hadQueuedResume = this.resumeTimer !== null;
     this.clearTimers();
 
     const playback = this.stateSync.getPlayback();
@@ -102,7 +103,7 @@ export class ControlManager {
       },
     );
 
-    const shouldResume = pauseForInteraction && playback.status === 'playing';
+    const shouldResume = pauseForInteraction && (playback.status === 'playing' || hadQueuedResume);
     this.stateSync.updatePlayback(nextPlayback);
     this.showCurrentScript();
 
@@ -116,6 +117,7 @@ export class ControlManager {
   }
 
   private async rewindChunk(): Promise<boolean> {
+    const hadQueuedResume = this.resumeTimer !== null;
     this.clearTimers();
 
     const playback = this.stateSync.getPlayback();
@@ -136,7 +138,7 @@ export class ControlManager {
       },
     );
 
-    const shouldResume = playback.status === 'playing';
+    const shouldResume = playback.status === 'playing' || hadQueuedResume;
     this.stateSync.updatePlayback(nextPlayback);
     this.showCurrentScript();
 
@@ -218,14 +220,26 @@ export class ControlManager {
     const playback = this.stateSync.getPlayback();
     const currentChunk = activeScript && playback ? activeScript.chunks[playback.chunkIndex] ?? '' : '';
     const durationMs =
-      activeScript && playback ? calculateChunkDurationMs(currentChunk, playback.scrollSpeed) : undefined;
+      activeScript && playback && playback.status === 'playing'
+        ? calculateChunkDurationMs(currentChunk, playback.scrollSpeed)
+        : undefined;
 
     this.display.showActiveScript(activeScript, durationMs);
   }
 }
 
 function calculateChunkDurationMs(chunk: string, scrollSpeed: number): number {
-  const wordCount = chunk.split(/\s+/).filter(Boolean).length || 1;
-  const ms = Math.round((wordCount / Math.max(scrollSpeed, 60)) * 60_000);
+  const readableUnits = estimateReadableUnits(chunk);
+  const ms = Math.round((readableUnits / Math.max(scrollSpeed, 60)) * 60_000);
   return Math.max(ms, MIN_CHUNK_DURATION_MS);
+}
+
+function estimateReadableUnits(chunk: string): number {
+  const words = chunk.split(/\s+/).filter(Boolean);
+  if (words.length > 1) {
+    return words.length;
+  }
+
+  const visibleChars = Array.from(chunk).filter((char) => !/\s/u.test(char)).length;
+  return Math.max(Math.ceil(visibleChars / 2), 1);
 }
