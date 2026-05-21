@@ -32,3 +32,5 @@ export interface TeleprompterProfile {
   volumeButtonMode: boolean;
   lastSetupAt?: string;
 }
+
+export type ScriptFamily = 'latin' | 'cjk' | 'rtl';
