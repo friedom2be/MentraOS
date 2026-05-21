@@ -49,7 +49,7 @@ export class StateSync {
 
     const profileChanged = serializeProfile(nextProfile) !== serializeProfile(this.profile);
     const scriptChanged = serializeScript(nextScript) !== serializeScript(this.activeScript);
-    const shouldPreserveStatus = isSameScript(this.activeScript, nextScript);
+    const shouldPreserveStatus = !scriptChanged;
 
     this.profile = nextProfile;
     this.activeScript = nextScript;
@@ -103,19 +103,6 @@ export class StateSync {
   private getNow(): string {
     return (this.services.now || (() => new Date().toISOString()))();
   }
-}
-
-function isSameScript(left: ActiveScript | null, right: ActiveScript | null): boolean {
-  if (!left || !right) {
-    return false;
-  }
-
-  return (
-    left.sourceType === right.sourceType &&
-    left.sourceTitle === right.sourceTitle &&
-    left.rawText === right.rawText &&
-    left.displayText === right.displayText
-  );
 }
 
 function serializeProfile(profile: TeleprompterProfile): string {
