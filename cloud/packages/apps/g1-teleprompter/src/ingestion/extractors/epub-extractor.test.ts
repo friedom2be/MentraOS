@@ -45,5 +45,11 @@ describe('extractFromEpub', () => {
     expect(result.title).toBe('Sample EPUB');
     expect(result.text).toContain('Chapter 1');
     expect(result.text).toContain('Hello teleprompter world.');
+    expect(result.chapters).toEqual([
+      {
+        title: 'Chapter 1',
+        text: 'Chapter 1 Hello teleprompter world.',
+      },
+    ]);
   });
 });

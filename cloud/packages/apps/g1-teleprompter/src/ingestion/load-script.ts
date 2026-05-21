@@ -44,15 +44,21 @@ export interface LoadScriptDeps {
 interface ExtractedSource {
   title: string;
   text: string;
+  chapters?: DetectedChapter[];
 }
 
 export async function loadScript(input: LoadScriptInput, deps: LoadScriptDeps): Promise<ActiveScript> {
   const extracted = await resolveSource(input);
   const scriptFamily = detectScriptFamily(extracted.text);
-  const chapterTexts = detectChapters(extracted.text, input.sourceType);
   const summarize = deps.summarize || summarizeText;
   const displayText = input.shouldSummarize ? await summarize(extracted.text, input.sourceType) : extracted.text;
-  const chunks = buildChunks(displayText, scriptFamily);
+  const displayChapters = resolveDisplayChapters({
+    extracted,
+    sourceType: input.sourceType,
+    displayText,
+    shouldSummarize: input.shouldSummarize,
+  });
+  const chunks = displayChapters.flatMap((chapter) => buildChunks(chapter.text, scriptFamily));
 
   const activeScript: ActiveScript = {
     sourceType: input.sourceType,
@@ -61,7 +67,7 @@ export async function loadScript(input: LoadScriptInput, deps: LoadScriptDeps): 
     displayText,
     chapterIndex: 0,
     chunkIndex: 0,
-    chapterList: mapChaptersToChunkRanges(chapterTexts, scriptFamily),
+    chapterList: mapChaptersToChunkRanges(displayChapters, chunks, scriptFamily),
     chunks,
     isSummarized: input.shouldSummarize,
     wordCountOriginal: extracted.text.split(/\s+/).filter(Boolean).length,
@@ -90,15 +96,18 @@ async function resolveSource(input: LoadScriptInput): Promise<ExtractedSource> {
 
 export function mapChaptersToChunkRanges(
   chapters: DetectedChapter[],
+  chunks: string[],
   scriptFamily: ScriptFamily,
 ): ScriptChapter[] {
   let cursor = 0;
+  let countedChunks = 0;
 
-  return chapters.map((chapter) => {
+  const chapterList = chapters.map((chapter) => {
     const chapterChunks = buildChunks(chapter.text, scriptFamily);
     const startChunkIndex = cursor;
     const endChunkIndex = cursor + Math.max(chapterChunks.length - 1, 0);
     cursor = endChunkIndex + 1;
+    countedChunks += chapterChunks.length;
 
     return {
       title: chapter.title,
@@ -106,4 +115,43 @@ export function mapChaptersToChunkRanges(
       endChunkIndex,
     };
   });
+
+  if (countedChunks !== chunks.length) {
+    return [
+      {
+        title: chapters[0]?.title || 'Full Script',
+        startChunkIndex: 0,
+        endChunkIndex: Math.max(chunks.length - 1, 0),
+      },
+    ];
+  }
+
+  return chapterList;
+}
+
+function resolveDisplayChapters({
+  extracted,
+  sourceType,
+  displayText,
+  shouldSummarize,
+}: {
+  extracted: ExtractedSource;
+  sourceType: ScriptSourceType;
+  displayText: string;
+  shouldSummarize: boolean;
+}): DetectedChapter[] {
+  if (shouldSummarize) {
+    return [
+      {
+        title: extracted.title,
+        text: displayText,
+      },
+    ];
+  }
+
+  if (sourceType === 'epub' && extracted.chapters?.length) {
+    return extracted.chapters;
+  }
+
+  return detectChapters(displayText, sourceType);
 }

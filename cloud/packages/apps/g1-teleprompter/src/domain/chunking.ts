@@ -11,7 +11,7 @@ export function buildChunks(text: string, scriptFamily: ScriptFamily): string[] 
     maxBytes: Infinity,
   });
   const lines = wrapped.lines.map((line) => line.trim()).filter(Boolean);
-  const pageSize = scriptFamily === 'latin' ? 4 : 4;
+  const pageSize = scriptFamily === 'latin' ? 5 : 4;
 
   const chunks: string[] = [];
   for (let index = 0; index < lines.length; index += pageSize) {

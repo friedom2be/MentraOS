@@ -4,7 +4,7 @@ import {buildChunks} from './chunking';
 
 describe('buildChunks', () => {
   test('creates multiple G1-sized chunks for long Latin text', () => {
-    const chunks = buildChunks('This is a teleprompter sentence. '.repeat(30), 'latin');
+    const chunks = buildChunks('This is a teleprompter sentence. '.repeat(40), 'latin');
     expect(chunks.length).toBeGreaterThan(3);
     expect(chunks[0].length).toBeGreaterThan(0);
   });
