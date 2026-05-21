@@ -1,10 +1,25 @@
 import type {Database} from 'bun:sqlite';
 
-import {coerceProfile, DEFAULT_PROFILE} from '../../domain/teleprompter-settings';
-import type {TeleprompterProfile, TeleprompterProfileRow} from '../../domain/types';
+import {coerceProfile} from '../../domain/teleprompter-settings';
+import type {TeleprompterProfile} from '../../domain/types';
+import type {PersistedProfileValues, TeleprompterProfileRow} from './persistence-types';
 
 export class ProfileRepository {
   constructor(private readonly db: Database) {}
+
+  private mapRow(row?: TeleprompterProfileRow | null): PersistedProfileValues {
+    return {
+      tokenHash: row?.token_hash || undefined,
+      tokenCreatedAt: row?.token_created_at || undefined,
+      lastSetupAt: row?.last_setup_at || undefined,
+      setupComplete: row ? Boolean(row.setup_complete) : undefined,
+      scrollSpeed: row?.scroll_speed,
+      summarizeArticles: row ? Boolean(row.summarize_articles) : undefined,
+      summarizeEpubs: row ? Boolean(row.summarize_epubs) : undefined,
+      summarizePdfs: row ? Boolean(row.summarize_pdfs) : undefined,
+      volumeButtonMode: row ? Boolean(row.volume_button_mode) : undefined,
+    };
+  }
 
   getProfile(): TeleprompterProfile {
     const row = this.db
@@ -24,7 +39,7 @@ export class ProfileRepository {
       `)
       .get();
 
-    return coerceProfile(row);
+    return coerceProfile(this.mapRow(row));
   }
 
   saveProfile(profile: Partial<TeleprompterProfile>): TeleprompterProfile {
@@ -54,7 +69,7 @@ export class ProfileRepository {
         nextProfile.setupComplete ? 1 : 0,
         nextProfile.tokenHash ?? null,
         nextProfile.tokenCreatedAt ?? null,
-        nextProfile.scrollSpeed ?? DEFAULT_PROFILE.scrollSpeed,
+        nextProfile.scrollSpeed,
         nextProfile.summarizeArticles ? 1 : 0,
         nextProfile.summarizeEpubs ? 1 : 0,
         nextProfile.summarizePdfs ? 1 : 0,

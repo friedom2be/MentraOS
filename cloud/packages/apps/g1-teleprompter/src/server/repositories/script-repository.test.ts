@@ -44,6 +44,9 @@ describe('ScriptRepository', () => {
 
     const saved = repo.getActiveScript();
     expect(saved?.sourceTitle).toBe('Draft 2');
+    expect(saved?.chapterIndex).toBe(0);
+    expect(saved?.chunkIndex).toBe(0);
+    expect(saved?.chapterList).toEqual([{title: 'Only Chapter', startChunkIndex: 0, endChunkIndex: 0}]);
     expect(saved?.isSummarized).toBe(true);
     expect(saved?.chunks).toEqual(['replacement text']);
   });

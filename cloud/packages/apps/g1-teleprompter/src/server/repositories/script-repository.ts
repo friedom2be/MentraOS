@@ -1,9 +1,18 @@
 import type {Database} from 'bun:sqlite';
 
-import type {ActiveScript, ActiveScriptRow} from '../../domain/types';
+import type {ActiveScript} from '../../domain/types';
+import type {ActiveScriptRow} from './persistence-types';
 
 export class ScriptRepository {
   constructor(private readonly db: Database) {}
+
+  private parseJson<T>(value: string, field: string): T {
+    try {
+      return JSON.parse(value) as T;
+    } catch (error) {
+      throw new Error(`Failed to parse active_script.${field}: ${String(error)}`);
+    }
+  }
 
   saveActiveScript(script: ActiveScript): void {
     this.db
@@ -88,8 +97,8 @@ export class ScriptRepository {
       displayText: row.display_text,
       chapterIndex: row.chapter_index,
       chunkIndex: row.chunk_index,
-      chapterList: JSON.parse(row.chapter_list_json),
-      chunks: JSON.parse(row.chunks_json),
+      chapterList: this.parseJson(row.chapter_list_json, 'chapter_list_json'),
+      chunks: this.parseJson(row.chunks_json, 'chunks_json'),
       isSummarized: Boolean(row.is_summarized),
       wordCountOriginal: row.word_count_original,
       wordCountDisplay: row.word_count_display,
