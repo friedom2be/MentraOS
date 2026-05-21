@@ -129,11 +129,12 @@ function decodeBase64File(input: Record<string, unknown>): Uint8Array {
     throw Response.json({error: 'base64Data is required'}, {status: 400});
   }
 
-  try {
-    return Uint8Array.from(Buffer.from(input.base64Data, 'base64'));
-  } catch {
+  const normalized = input.base64Data.trim().replace(/\s+/g, '');
+  if (!isValidBase64(normalized)) {
     throw Response.json({error: 'Invalid base64Data'}, {status: 400});
   }
+
+  return Uint8Array.from(Buffer.from(normalized, 'base64'));
 }
 
 function getDefaultSummarize(sourceType: string, profile: TeleprompterProfile): boolean {
@@ -155,4 +156,17 @@ function isControlAction(action: string): action is ControlAction {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isValidBase64(value: string): boolean {
+  if (!value || value.length % 4 !== 0) {
+    return false;
+  }
+
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
+    return false;
+  }
+
+  const decoded = Buffer.from(value, 'base64');
+  return decoded.length > 0 && decoded.toString('base64') === value;
 }

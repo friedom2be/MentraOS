@@ -74,6 +74,8 @@ export function createRoutes(deps: RouteDeps) {
     '/setup/reset': {
       POST: async (req: Request) =>
         await handleRoute(async () => {
+          const profile = deps.profileRepository.getProfile();
+          await requireBearerToken(req, profile.tokenHash);
           parseResetRequest(await parseJsonBody(req));
           return Response.json(await resetSetup(deps));
         }),
@@ -89,7 +91,12 @@ export function createRoutes(deps: RouteDeps) {
         }),
     },
     '/state': {
-      GET: async (_req: Request) => await handleRoute(async () => Response.json(getState(deps))),
+      GET: async (req: Request) =>
+        await handleRoute(async () => {
+          const profile = deps.profileRepository.getProfile();
+          await requireBearerToken(req, profile.tokenHash);
+          return Response.json(getState(deps));
+        }),
     },
     '/state/control': {
       POST: async (req: Request) =>

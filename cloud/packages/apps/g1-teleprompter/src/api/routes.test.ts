@@ -72,10 +72,23 @@ describe('routes', () => {
     const token = await initializeSetup(routes);
     const previousTokenHash = profile.tokenHash;
 
-    const rejectedResponse = await routes['/setup/reset'].POST(
+    const unauthorizedResponse = await routes['/setup/reset'].POST(
       new Request('http://localhost/setup/reset', {
         method: 'POST',
         headers: {'content-type': 'application/json'},
+        body: JSON.stringify({confirmReset: true}),
+      }),
+    );
+
+    expect(unauthorizedResponse.status).toBe(401);
+
+    const rejectedResponse = await routes['/setup/reset'].POST(
+      new Request('http://localhost/setup/reset', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
         body: JSON.stringify({confirmReset: false}),
       }),
     );
@@ -85,7 +98,10 @@ describe('routes', () => {
     const response = await routes['/setup/reset'].POST(
       new Request('http://localhost/setup/reset', {
         method: 'POST',
-        headers: {'content-type': 'application/json'},
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
         body: JSON.stringify({confirmReset: true}),
       }),
     );
@@ -99,6 +115,39 @@ describe('routes', () => {
     expect(profile.setupComplete).toBe(false);
     expect(profile.tokenHash).toBeDefined();
     expect(profile.tokenHash).not.toBe(previousTokenHash);
+  });
+
+  test('GET /state requires bearer auth', async () => {
+    activeScript = createActiveScript();
+    const routes = createRoutes(createFakeDeps());
+
+    const response = await routes['/state'].GET(new Request('http://localhost/state'));
+
+    expect(response.status).toBe(401);
+  });
+
+  test('POST /load rejects malformed base64 uploads cleanly', async () => {
+    const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
+
+    const response = await routes['/load'].POST(
+      new Request('http://localhost/load', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sourceType: 'pdf',
+          filename: 'bad.pdf',
+          base64Data: '%%%not-base64%%%',
+          shouldSummarize: false,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({error: 'Invalid base64Data'});
   });
 
   test('POST /load requires bearer auth', async () => {
@@ -192,8 +241,13 @@ describe('routes', () => {
   test('GET /state returns profile and active script state', async () => {
     activeScript = createActiveScript();
     const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
 
-    const response = await routes['/state'].GET(new Request('http://localhost/state'));
+    const response = await routes['/state'].GET(
+      new Request('http://localhost/state', {
+        headers: {authorization: `Bearer ${token}`},
+      }),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(200);
