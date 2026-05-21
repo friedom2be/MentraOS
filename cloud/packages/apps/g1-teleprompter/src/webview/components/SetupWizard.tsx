@@ -31,7 +31,7 @@ export function SetupWizard({
     <section className="setup-shell">
       <div className="panel panel--hero">
         <p className="eyebrow">Task 6 Webview</p>
-        <h1>Set up your G1 teleprompter dashboard</h1>
+        <h1>Set up Mentra HUD Reader</h1>
         <p className="lede">
           This screen mints a one-time setup token, hands it off to your shortcut, and unlocks the authenticated
           dashboard for loading and controlling scripts.

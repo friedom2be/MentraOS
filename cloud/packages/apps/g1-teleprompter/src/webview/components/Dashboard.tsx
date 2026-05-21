@@ -115,7 +115,7 @@ export function Dashboard({
     <section className="dashboard-shell">
       <header className="dashboard-hero panel panel--hero">
         <div>
-          <p className="eyebrow">G1 Teleprompter</p>
+          <p className="eyebrow">Mentra HUD Reader</p>
           <h1>{appState.activeScript?.sourceTitle || 'Load a script to begin'}</h1>
           <p className="lede">
             Percentage progress is tracked against the final displayed chunk sequence, so resume points stay aligned

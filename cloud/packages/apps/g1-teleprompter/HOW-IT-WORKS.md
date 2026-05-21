@@ -1,8 +1,8 @@
-# How G1 Teleprompter Works
+# How Mentra HUD Reader Works
 
 ## Overview
 
-The G1 teleprompter is a hosted single-user mini-app for MentraOS:
+Mentra HUD Reader is a hosted single-user mini-app for MentraOS:
 
 1. The user completes one-time setup in the webview.
 2. The setup flow generates a bearer token for an iPhone Shortcut.

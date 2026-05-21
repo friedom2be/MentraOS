@@ -1,6 +1,6 @@
-# G1 Teleprompter
+# Mentra HUD Reader
 
-Hosted single-user MentraOS teleprompter mini-app for G1 glasses.
+Hosted single-user MentraOS reading mini-app for G1 glasses.
 
 This package combines:
 

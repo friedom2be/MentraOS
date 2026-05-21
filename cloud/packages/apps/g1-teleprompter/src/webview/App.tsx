@@ -35,7 +35,7 @@ export function App() {
         ) : (
           <section className="empty-state">
             <p className="eyebrow">Connecting</p>
-            <h1>Loading teleprompter state</h1>
+            <h1>Loading Mentra HUD Reader</h1>
             <p>{app.error || 'Checking your current setup and playback state.'}</p>
             <button className="button button--primary" disabled={app.busy} onClick={() => void app.refreshState()}>
               Retry

@@ -275,7 +275,7 @@ function toPublicProfile(profile: TeleprompterProfile): PublicTeleprompterProfil
 }
 
 function createShortcutUrl(token: string): string {
-  const shortcutName = encodeURIComponent('Mentra Teleprompter Setup');
+  const shortcutName = encodeURIComponent('Mentra HUD Reader Setup');
   const encodedToken = encodeURIComponent(token);
   return `shortcuts://run-shortcut?name=${shortcutName}&input=text&text=${encodedToken}`;
 }
