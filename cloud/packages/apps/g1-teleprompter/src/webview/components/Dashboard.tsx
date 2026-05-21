@@ -1,116 +1,292 @@
 import {useState} from 'react';
 
+import type {ControlAction} from '../../api/request-parsing';
 import type {AppStateResponse} from '../../domain/types';
-import type {AppStateController} from '../hooks/useAppState';
+import type {LoadRequestPayload} from '../hooks/useAppState';
+import {PreviewCard} from './PreviewCard';
+import {SettingsPanel} from './SettingsPanel';
 
 interface DashboardProps {
-  app: AppStateController;
-  state: AppStateResponse;
+  appState: AppStateResponse;
+  busy: boolean;
+  error: string | null;
+  onLoadScript: (payload: LoadRequestPayload) => Promise<void>;
+  onRefreshState: () => Promise<void>;
+  onResetSetup: () => Promise<void>;
+  onSendControl: (action: ControlAction, percentage?: number) => Promise<void>;
+  onUpdateSettings: (settings: {
+    scrollSpeed?: number;
+    summarizeArticles?: boolean;
+    summarizeEpubs?: boolean;
+    summarizePdfs?: boolean;
+    volumeButtonMode?: boolean;
+  }) => Promise<void>;
 }
 
-export function Dashboard({app, state}: DashboardProps) {
-  const [percentageInput, setPercentageInput] = useState('');
-  const activeScript = state.activeScript;
-  const preview = state.preview;
+type SourceMode = 'text' | 'url' | 'file';
 
-  async function handleJump(): Promise<void> {
-    if (!percentageInput.trim()) {
+export function Dashboard({
+  appState,
+  busy,
+  error,
+  onLoadScript,
+  onRefreshState,
+  onResetSetup,
+  onSendControl,
+  onUpdateSettings,
+}: DashboardProps) {
+  const [sourceMode, setSourceMode] = useState<SourceMode>('text');
+  const [title, setTitle] = useState('');
+  const [text, setText] = useState('');
+  const [url, setUrl] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [shouldSummarize, setShouldSummarize] = useState(false);
+  const [percentageInput, setPercentageInput] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const percentageValue = parsePercentageInput(percentageInput);
+
+  async function handleLoad(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLocalError(null);
+
+    try {
+      switch (sourceMode) {
+        case 'text':
+          if (!text.trim()) {
+            throw new Error('Add some text before loading the teleprompter.');
+          }
+
+          await onLoadScript({
+            sourceType: 'text',
+            title: title.trim() || undefined,
+            text,
+            shouldSummarize,
+          });
+          break;
+        case 'url':
+          if (!url.trim()) {
+            throw new Error('Enter a URL to ingest.');
+          }
+
+          await onLoadScript({
+            sourceType: 'url',
+            url: url.trim(),
+            shouldSummarize,
+          });
+          break;
+        case 'file':
+          if (!file) {
+            throw new Error('Choose a file first.');
+          }
+
+          await onLoadScript({
+            sourceType: getFileSourceType(file.name),
+            filename: file.name,
+            base64Data: await fileToBase64(file),
+            shouldSummarize,
+          });
+          break;
+      }
+    } catch (nextError) {
+      setLocalError(nextError instanceof Error ? nextError.message : 'Unable to load this source.');
+    }
+  }
+
+  async function handleJumpToPercentage() {
+    if (percentageValue === null) {
+      setLocalError('Enter a percentage between 0 and 100.');
       return;
     }
 
-    await app.applyControl('jump_to_percent', Number.parseFloat(percentageInput));
+    setLocalError(null);
+    await onSendControl('jump_to_percent', percentageValue);
   }
 
-  if (!activeScript || !preview) {
-    return (
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Dashboard</p>
-            <h2>No active script yet</h2>
-          </div>
-        </div>
-        <p className="muted-copy">
-          Send selected text, a web article URL, a PDF, or a DRM-free ePub from your iPhone Shortcut to prepare the
-          next teleprompter script.
-        </p>
-      </section>
-    );
+  async function handleResume() {
+    if (percentageValue !== null) {
+      await onSendControl('jump_to_percent', percentageValue);
+    }
+
+    await onSendControl('resume');
   }
 
   return (
-    <section className="panel">
-      <div className="panel-header">
+    <section className="dashboard-shell">
+      <header className="dashboard-hero panel panel--hero">
         <div>
-          <p className="eyebrow">Dashboard</p>
-          <h2>{activeScript.sourceTitle}</h2>
+          <p className="eyebrow">G1 Teleprompter</p>
+          <h1>{appState.activeScript?.sourceTitle || 'Load a script to begin'}</h1>
+          <p className="lede">
+            Percentage progress is tracked against the final displayed chunk sequence, so resume points stay aligned
+            across plain text, URLs, PDFs, and EPUB chapter imports.
+          </p>
         </div>
-        <div className="pill-row">
-          <span className="stat-pill">{preview.percentageComplete}% completed</span>
-          {activeScript.isSummarized ? <span className="stat-pill stat-pill-accent">Summarized</span> : null}
-        </div>
-      </div>
 
-      <div className="stat-grid">
-        <div className="stat-card">
-          <span className="stat-label">Chapter</span>
-          <strong>{preview.currentChapterTitle || 'Full Script'}</strong>
+        <div className="hero-metrics">
+          <div className="hero-metric">
+            <span>Progress</span>
+            <strong>{appState.preview?.percentageComplete ?? 0}%</strong>
+          </div>
+          <div className="hero-metric">
+            <span>Chunks</span>
+            <strong>{appState.preview?.totalChunks ?? 0}</strong>
+          </div>
+          <div className="hero-metric">
+            <span>WPM</span>
+            <strong>{appState.profile.scrollSpeed}</strong>
+          </div>
         </div>
-        <div className="stat-card">
-          <span className="stat-label">Saved chunk</span>
-          <strong>
-            {preview.globalChunkIndex + 1} / {preview.totalChunks}
-          </strong>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Playback speed</span>
-          <strong>{state.profile.scrollSpeed} WPM</strong>
-        </div>
-      </div>
+      </header>
 
-      <div className="jump-panel">
-        <label className="field" htmlFor="resume-percentage">
-          <span>Start at % / Resume at %</span>
-          <input
-            id="resume-percentage"
-            inputMode="decimal"
-            max={100}
-            min={0}
-            onChange={(event) => setPercentageInput(event.target.value)}
-            placeholder="Optional, 0-100"
-            type="number"
-            value={percentageInput}
+      <div className="dashboard-grid">
+        <div className="dashboard-main">
+          <PreviewCard
+            busy={busy}
+            onChangePercentage={setPercentageInput}
+            onFinish={async () => await onSendControl('finished')}
+            onJumpToPercentage={handleJumpToPercentage}
+            onNextChapter={async () => await onSendControl('next_chapter')}
+            onPause={async () => await onSendControl('pause')}
+            onRepeat={async () => await onSendControl('repeat')}
+            onRestart={async () => await onSendControl('restart')}
+            onResume={handleResume}
+            percentageInput={percentageInput}
+            preview={appState.preview}
           />
-        </label>
-        <button className="button button-secondary" disabled={!percentageInput.trim()} onClick={() => void handleJump()} type="button">
-          Set position
-        </button>
-      </div>
-      <p className="field-hint">
-        Leave this blank to keep today&apos;s default behavior: resume from the saved position or start at the beginning
-        as usual.
-      </p>
 
-      <div className="button-row">
-        <button className="button button-primary" onClick={() => void app.applyControl('resume')} type="button">
-          Resume
-        </button>
-        <button className="button button-secondary" onClick={() => void app.applyControl('pause')} type="button">
-          Pause
-        </button>
-        <button className="button button-secondary" onClick={() => void app.applyControl('restart')} type="button">
-          Restart
-        </button>
-        <button className="button button-secondary" onClick={() => void app.applyControl('next_chapter')} type="button">
-          Next chapter
-        </button>
-        <button className="button button-danger" onClick={() => void app.applyControl('finished')} type="button">
-          Finished
-        </button>
+          <section className="panel">
+            <div className="panel__header">
+              <div>
+                <p className="eyebrow">Load</p>
+                <h2>Bring in the next script</h2>
+              </div>
+              <button className="button button--ghost" disabled={busy} onClick={() => void onRefreshState()}>
+                Refresh state
+              </button>
+            </div>
+
+            <div className="tab-row">
+              <TabButton active={sourceMode === 'text'} label="Text" onClick={() => setSourceMode('text')} />
+              <TabButton active={sourceMode === 'url'} label="URL" onClick={() => setSourceMode('url')} />
+              <TabButton active={sourceMode === 'file'} label="File" onClick={() => setSourceMode('file')} />
+            </div>
+
+            <form className="stack" onSubmit={(event) => void handleLoad(event)}>
+              {sourceMode === 'text' ? (
+                <>
+                  <label className="field">
+                    <span className="field__label">Title</span>
+                    <input className="input" onChange={(event) => setTitle(event.target.value)} value={title} />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Script text</span>
+                    <textarea
+                      className="textarea"
+                      onChange={(event) => setText(event.target.value)}
+                      placeholder="Paste a speech, outline, or talking points."
+                      rows={10}
+                      value={text}
+                    />
+                  </label>
+                </>
+              ) : null}
+
+              {sourceMode === 'url' ? (
+                <label className="field">
+                  <span className="field__label">Article URL</span>
+                  <input
+                    className="input"
+                    onChange={(event) => setUrl(event.target.value)}
+                    placeholder="https://example.com/story"
+                    type="url"
+                    value={url}
+                  />
+                </label>
+              ) : null}
+
+              {sourceMode === 'file' ? (
+                <label className="field">
+                  <span className="field__label">File upload</span>
+                  <input
+                    accept=".pdf,.epub,.txt,.md"
+                    className="input input--file"
+                    onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                    type="file"
+                  />
+                </label>
+              ) : null}
+
+              <label className="toggle">
+                <span>Summarize before chunking</span>
+                <input checked={shouldSummarize} onChange={(event) => setShouldSummarize(event.target.checked)} type="checkbox" />
+              </label>
+
+              <button className="button button--primary" disabled={busy} type="submit">
+                Load into preview
+              </button>
+            </form>
+          </section>
+        </div>
+
+        <div className="dashboard-side">
+          <SettingsPanel busy={busy} onResetSetup={onResetSetup} onUpdateSettings={onUpdateSettings} profile={appState.profile} />
+        </div>
       </div>
 
-      <div className="preview-copy">{preview.currentChunk || 'Current teleprompter chunk unavailable.'}</div>
-      {app.busy ? <div className="notice">{app.busy}</div> : null}
+      {error || localError ? <p className="banner banner--error">{error || localError}</p> : null}
     </section>
   );
+}
+
+interface TabButtonProps {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}
+
+function TabButton({active, label, onClick}: TabButtonProps) {
+  return (
+    <button className={`tab-button${active ? ' tab-button--active' : ''}`} onClick={onClick} type="button">
+      {label}
+    </button>
+  );
+}
+
+function getFileSourceType(fileName: string): 'pdf' | 'epub' | 'txt' | 'md' {
+  const extension = fileName.toLowerCase().split('.').pop();
+
+  switch (extension) {
+    case 'pdf':
+    case 'epub':
+    case 'txt':
+    case 'md':
+      return extension;
+    default:
+      throw new Error('Unsupported file type. Use PDF, EPUB, TXT, or MD.');
+  }
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+
+  for (const byte of buffer) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary);
+}
+
+function parsePercentageInput(value: string): number | null {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const numericValue = Number(value);
+  if (Number.isNaN(numericValue)) {
+    return null;
+  }
+
+  return Math.min(100, Math.max(0, Math.round(numericValue)));
 }

@@ -1,255 +1,274 @@
 import {useEffect, useState} from 'react';
 
-import type {AppStateResponse, PublicTeleprompterProfile} from '../../domain/types';
+import type {ControlAction, SettingsRequest} from '../../api/request-parsing';
+import type {AppStateResponse} from '../../domain/types';
 
-const TOKEN_STORAGE_KEY = 'g1-teleprompter-token';
+const TOKEN_STORAGE_KEY = 'g1-teleprompter.setup-token';
+
+export type LoadRequestPayload =
+  | {
+      sourceType: 'text';
+      title?: string;
+      text: string;
+      shouldSummarize?: boolean;
+    }
+  | {
+      sourceType: 'url';
+      url: string;
+      shouldSummarize?: boolean;
+    }
+  | {
+      sourceType: 'pdf' | 'epub' | 'txt' | 'md';
+      filename: string;
+      base64Data: string;
+      shouldSummarize?: boolean;
+    };
 
 interface SetupInitResponse {
   token: string;
   shortcutUrl: string;
 }
 
-interface SetupVerifyResponse {
-  ok: true;
-  profile: PublicTeleprompterProfile;
-}
-
 interface SetupResetResponse extends SetupInitResponse {
-  profile: PublicTeleprompterProfile;
+  profile: AppStateResponse['profile'];
 }
 
-export interface AppStateController {
-  state: AppStateResponse | null;
-  token: string | null;
-  error: string | null;
-  busy: string | null;
-  refresh: () => Promise<void>;
-  initSetup: () => Promise<SetupInitResponse>;
-  verifySetup: (token: string) => Promise<SetupVerifyResponse>;
-  applyControl: (action: string, percentage?: number) => Promise<void>;
-  saveSettings: (settings: Partial<PublicTeleprompterProfile>) => Promise<void>;
-  resetSetup: () => Promise<SetupResetResponse>;
+interface RequestOptions {
+  auth?: boolean;
+  method?: 'GET' | 'POST';
+  body?: unknown;
 }
 
-export function useAppState(): AppStateController {
-  const [token, setToken] = useState<string | null>(() => window.localStorage.getItem(TOKEN_STORAGE_KEY));
-  const [state, setState] = useState<AppStateResponse | null>(null);
+export function useAppState() {
+  const [token, setToken] = useState<string | null>(() => readStoredToken());
+  const [generatedToken, setGeneratedToken] = useState<string | null>(() => readStoredToken());
+  const [shortcutUrl, setShortcutUrl] = useState<string | null>(null);
+  const [appState, setAppState] = useState<AppStateResponse | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
-      setState(null);
-      setError(null);
       return;
     }
 
-    let cancelled = false;
+    let canceled = false;
 
-    const poll = async () => {
+    const tick = async () => {
+      if (document.visibilityState === 'hidden') {
+        return;
+      }
+
       try {
-        const nextState = await requestJson<AppStateResponse>('/state', {
-          headers: {authorization: `Bearer ${token}`},
-        });
-
-        if (!cancelled) {
-          setState(nextState);
+        const nextState = await requestJson<AppStateResponse>('/state', {auth: true}, token);
+        if (!canceled) {
+          setAppState(nextState);
           setError(null);
         }
-      } catch (requestError) {
-        if (!cancelled) {
-          setError(toMessage(requestError));
+      } catch (nextError) {
+        if (!canceled) {
+          setError(toMessage(nextError));
         }
       }
     };
 
-    void poll();
-    const interval = window.setInterval(() => {
-      void poll();
-    }, 2_000);
+    void tick();
+    const intervalId = window.setInterval(() => {
+      void tick();
+    }, 3000);
 
     return () => {
-      cancelled = true;
-      window.clearInterval(interval);
+      canceled = true;
+      window.clearInterval(intervalId);
     };
   }, [token]);
 
-  async function refresh(nextToken = token): Promise<void> {
-    if (!nextToken) {
-      setState(null);
+  async function initializeSetup() {
+    await runWithBusy(async () => {
+      const response = await requestJson<SetupInitResponse>('/setup/init', {method: 'POST', auth: false});
+      persistToken(response.token);
+      setToken(response.token);
+      setGeneratedToken(response.token);
+      setShortcutUrl(response.shortcutUrl);
+      setAppState(null);
+    });
+  }
+
+  async function verifySetup(nextToken?: string) {
+    await runWithBusy(async () => {
+      const tokenToUse = nextToken?.trim() || token;
+      if (!tokenToUse) {
+        throw new Error('Enter your setup token first.');
+      }
+
+      persistToken(tokenToUse);
+      setToken(tokenToUse);
+      setGeneratedToken(tokenToUse);
+
+      await requestJson('/setup/verify', {
+        method: 'POST',
+        auth: false,
+        body: {token: tokenToUse},
+      });
+
+      const nextState = await requestJson<AppStateResponse>('/state', {auth: true}, tokenToUse);
+      setAppState(nextState);
+    });
+  }
+
+  async function resetSetup() {
+    await runWithBusy(async () => {
+      const response = await requestJson<SetupResetResponse>(
+        '/setup/reset',
+        {method: 'POST', auth: true, body: {confirmReset: true}},
+        token,
+      );
+
+      persistToken(response.token);
+      setToken(response.token);
+      setGeneratedToken(response.token);
+      setShortcutUrl(response.shortcutUrl);
+      setAppState((currentState) =>
+        currentState
+          ? {
+              ...currentState,
+              profile: response.profile,
+            }
+          : null,
+      );
+    });
+  }
+
+  async function refreshState() {
+    if (!token) {
+      setError('Enter your setup token to load state.');
       return;
     }
 
-    const nextState = await requestJson<AppStateResponse>('/state', {
-      headers: {authorization: `Bearer ${nextToken}`},
+    await runWithBusy(async () => {
+      const nextState = await requestJson<AppStateResponse>('/state', {auth: true}, token);
+      setAppState(nextState);
     });
-    setState(nextState);
-    setError(null);
   }
 
-  async function initSetup(): Promise<SetupInitResponse> {
-    setBusy('Initializing setup…');
-    setError(null);
-
-    try {
-      return await requestJson<SetupInitResponse>('/setup/init', {
-        method: 'POST',
-        headers: {'content-type': 'application/json'},
-      });
-    } catch (requestError) {
-      const message = toMessage(requestError);
-      setError(message);
-      throw requestError;
-    } finally {
-      setBusy(null);
-    }
+  async function loadScript(payload: LoadRequestPayload) {
+    await runWithBusy(async () => {
+      const nextState = await requestJson<AppStateResponse>('/load', {method: 'POST', auth: true, body: payload}, token);
+      setAppState(nextState);
+    });
   }
 
-  async function verifySetup(plainToken: string): Promise<SetupVerifyResponse> {
-    setBusy('Verifying setup…');
-    setError(null);
-
-    try {
-      const response = await requestJson<SetupVerifyResponse>('/setup/verify', {
-        method: 'POST',
-        headers: {'content-type': 'application/json'},
-        body: JSON.stringify({token: plainToken}),
-      });
-
-      window.localStorage.setItem(TOKEN_STORAGE_KEY, plainToken);
-      setToken(plainToken);
-      await refresh(plainToken);
-      return response;
-    } catch (requestError) {
-      const message = toMessage(requestError);
-      setError(message);
-      throw requestError;
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function applyControl(action: string, percentage?: number): Promise<void> {
-    if (!token) {
-      throw new Error('Setup token is not available');
-    }
-
-    setBusy('Updating playback…');
-    setError(null);
-
-    try {
-      const nextState = await requestJson<AppStateResponse>('/state/control', {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
+  async function sendControl(action: ControlAction, percentage?: number) {
+    await runWithBusy(async () => {
+      const nextState = await requestJson<AppStateResponse>(
+        '/state/control',
+        {
+          method: 'POST',
+          auth: true,
+          body: typeof percentage === 'number' ? {action, percentage} : {action},
         },
-        body: JSON.stringify(
-          typeof percentage === 'number'
-            ? {
-                action,
-                percentage,
-              }
-            : {action},
-        ),
-      });
-
-      setState(nextState);
-    } catch (requestError) {
-      const message = toMessage(requestError);
-      setError(message);
-      throw requestError;
-    } finally {
-      setBusy(null);
-    }
+        token,
+      );
+      setAppState(nextState);
+    });
   }
 
-  async function saveSettings(settings: Partial<PublicTeleprompterProfile>): Promise<void> {
-    if (!token) {
-      throw new Error('Setup token is not available');
-    }
+  async function updateSettings(settings: SettingsRequest) {
+    await runWithBusy(async () => {
+      const nextState = await requestJson<AppStateResponse>('/settings', {method: 'POST', auth: true, body: settings}, token);
+      setAppState(nextState);
+    });
+  }
 
-    setBusy('Saving settings…');
+  async function runWithBusy(task: () => Promise<void>) {
+    setBusy(true);
     setError(null);
 
     try {
-      const nextState = await requestJson<AppStateResponse>('/settings', {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify(settings),
-      });
-
-      setState(nextState);
-    } catch (requestError) {
-      const message = toMessage(requestError);
-      setError(message);
-      throw requestError;
+      await task();
+    } catch (nextError) {
+      setError(toMessage(nextError));
     } finally {
-      setBusy(null);
-    }
-  }
-
-  async function resetSetup(): Promise<SetupResetResponse> {
-    if (!token) {
-      throw new Error('Setup token is not available');
-    }
-
-    setBusy('Re-initializing setup…');
-    setError(null);
-
-    try {
-      const response = await requestJson<SetupResetResponse>('/setup/reset', {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({confirmReset: true}),
-      });
-
-      window.localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
-      setToken(response.token);
-      setState({
-        profile: response.profile,
-        activeScript: null,
-        preview: null,
-      });
-      return response;
-    } catch (requestError) {
-      const message = toMessage(requestError);
-      setError(message);
-      throw requestError;
-    } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
 
   return {
-    state,
-    token,
-    error,
+    appState,
     busy,
-    refresh,
-    initSetup,
-    verifySetup,
-    applyControl,
-    saveSettings,
+    error,
+    generatedToken,
+    shortcutUrl,
+    token,
+    initializeSetup,
+    loadScript,
+    refreshState,
     resetSetup,
+    sendControl,
+    updateSettings,
+    verifySetup,
   };
 }
 
-async function requestJson<T>(input: string, init: RequestInit): Promise<T> {
-  const response = await fetch(input, init);
-  const body = (await response.json().catch(() => ({}))) as {error?: string};
+async function requestJson<T = unknown>(path: string, options: RequestOptions, token?: string | null): Promise<T> {
+  const headers = new Headers();
 
-  if (!response.ok) {
-    throw new Error(body.error || `Request failed with status ${response.status}`);
+  if (options.body !== undefined) {
+    headers.set('content-type', 'application/json');
   }
 
-  return body as T;
+  if (options.auth !== false) {
+    if (!token) {
+      throw new Error('A setup token is required for this action.');
+    }
+
+    headers.set('authorization', `Bearer ${token}`);
+  }
+
+  const response = await fetch(path, {
+    method: options.method || 'GET',
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return (await response.json()) as T;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as {error?: string};
+    if (typeof body.error === 'string' && body.error) {
+      return body.error;
+    }
+  } catch {}
+
+  return `Request failed (${response.status})`;
+}
+
+function persistToken(token: string | null) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (!token) {
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+}
+
+function readStoredToken(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const stored = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+  return stored && stored.trim() ? stored.trim() : null;
 }
 
 function toMessage(error: unknown): string {

@@ -1,111 +1,111 @@
-import {useMemo, useState} from 'react';
-
-import type {AppStateController} from '../hooks/useAppState';
+import {useEffect, useState} from 'react';
 
 interface SetupWizardProps {
-  app: AppStateController;
+  busy: boolean;
+  error: string | null;
+  generatedToken: string | null;
+  savedToken: string | null;
+  shortcutUrl: string | null;
+  onCreateToken: () => Promise<void>;
+  onRefreshState: () => Promise<void>;
+  onVerifyToken: (token?: string) => Promise<void>;
 }
 
-export function SetupWizard({app}: SetupWizardProps) {
-  const [step, setStep] = useState(0);
-  const [setupToken, setSetupToken] = useState<string | null>(app.token);
-  const [shortcutUrl, setShortcutUrl] = useState<string | null>(null);
-  const canVerify = useMemo(() => Boolean(setupToken), [setupToken]);
+export function SetupWizard({
+  busy,
+  error,
+  generatedToken,
+  savedToken,
+  shortcutUrl,
+  onCreateToken,
+  onRefreshState,
+  onVerifyToken,
+}: SetupWizardProps) {
+  const [tokenInput, setTokenInput] = useState(savedToken || '');
 
-  const steps = ['Welcome', 'Generate token', 'Install shortcut', 'Test connection'];
-
-  async function handleGenerateToken(): Promise<void> {
-    const response = await app.initSetup();
-    setSetupToken(response.token);
-    setShortcutUrl(response.shortcutUrl);
-    setStep(1);
-  }
-
-  async function handleVerify(): Promise<void> {
-    if (!setupToken) {
-      return;
-    }
-
-    await app.verifySetup(setupToken);
-  }
+  useEffect(() => {
+    setTokenInput(generatedToken || savedToken || '');
+  }, [generatedToken, savedToken]);
 
   return (
-    <main className="shell shell-centered">
-      <section className="hero-panel setup-panel">
-        <p className="eyebrow">First-run setup</p>
-        <h1>Connect your iPhone Shortcut once</h1>
-        <p className="hero-copy">
-          This guided flow gives the Shortcut a personal bearer token so you can send text, URLs, PDFs, and ePub files
-          into the teleprompter from anywhere.
+    <section className="setup-shell">
+      <div className="panel panel--hero">
+        <p className="eyebrow">Task 6 Webview</p>
+        <h1>Set up your G1 teleprompter dashboard</h1>
+        <p className="lede">
+          This screen mints a one-time setup token, hands it off to your shortcut, and unlocks the authenticated
+          dashboard for loading and controlling scripts.
         </p>
+      </div>
 
-        <ol className="step-list" start={1}>
-          {steps.map((label, index) => (
-            <li className={index <= step ? 'step-item step-item-active' : 'step-item'} key={label}>
-              <span>{label}</span>
-            </li>
-          ))}
-        </ol>
+      <div className="setup-grid">
+        <article className="panel">
+          <h2>1. Generate or recover a token</h2>
+          <p className="muted">
+            The first setup token is shown once. If you already have it, paste it below. If not, mint it here and keep
+            this tab open.
+          </p>
 
-        <div className="card-stack">
-          <article className="card">
-            <h2>1. Welcome</h2>
-            <p>
-              The app needs a one-time Shortcut connection. After that, your dashboard keeps the saved teleprompter
-              position and settings until you choose to reset them.
-            </p>
-            <button className="button button-primary" onClick={() => setStep(0)} type="button">
-              Review intro
+          <div className="stack">
+            <button className="button button--primary" disabled={busy} onClick={() => void onCreateToken()}>
+              Show setup token
             </button>
-          </article>
 
-          <article className="card">
-            <h2>2. Generate token</h2>
-            <p>The token is shown once here, then stored only as a server-side hash.</p>
-            <div className="token-box">{setupToken || 'Generate a token to continue.'}</div>
-            <div className="button-row">
-              <button className="button button-primary" onClick={() => void handleGenerateToken()} type="button">
-                Generate token
-              </button>
-              <button
-                className="button button-secondary"
-                disabled={!setupToken}
-                onClick={() => setupToken && void navigator.clipboard.writeText(setupToken)}
-                type="button">
-                Copy token
-              </button>
-            </div>
-          </article>
+            <label className="field">
+              <span className="field__label">Setup token</span>
+              <input
+                className="input"
+                onChange={(event) => setTokenInput(event.target.value)}
+                placeholder="Paste or confirm your one-time token"
+                value={tokenInput}
+              />
+            </label>
 
-          <article className="card">
-            <h2>3. Install Shortcut</h2>
-            <p>Open the prefilled Shortcut template with your token embedded, then save it on your iPhone.</p>
-            <div className="button-row">
-              <a className="button button-primary" href={shortcutUrl || '#'} target="_self">
-                Open in Shortcuts
-              </a>
-              <button className="button button-secondary" onClick={() => setStep(2)} type="button">
-                I saved it
-              </button>
-            </div>
-          </article>
+            {(generatedToken || savedToken) && (
+              <div className="token-card">
+                <span className="token-card__label">Active token</span>
+                <code>{generatedToken || savedToken}</code>
+              </div>
+            )}
+          </div>
+        </article>
 
-          <article className="card">
-            <h2>4. Test connection</h2>
-            <p>Run the test action from the Shortcut, then confirm here to finish setup and unlock the dashboard.</p>
-            <button
-              className="button button-primary"
-              disabled={!canVerify}
-              onClick={() => void handleVerify()}
-              type="button">
-              I ran the Shortcut test
-            </button>
-          </article>
-        </div>
+        <article className="panel">
+          <h2>2. Install the setup shortcut</h2>
+          <p className="muted">
+            The shortcut can receive the token automatically, but you can also continue by verifying the same token
+            directly from this dashboard.
+          </p>
 
-        {app.error ? <div className="notice notice-error">{app.error}</div> : null}
-        {app.busy ? <div className="notice">{app.busy}</div> : null}
-      </section>
-    </main>
+          {shortcutUrl ? (
+            <a className="button button--ghost" href={shortcutUrl}>
+              Open setup shortcut
+            </a>
+          ) : (
+            <div className="empty-inline">Generate a token to get the shortcut handoff link.</div>
+          )}
+
+          <div className="callout">
+            <strong>Shown-once behavior:</strong> if you refresh after `/setup/init`, the server will not mint a second
+            token until you reset setup from an authenticated session.
+          </div>
+        </article>
+      </div>
+
+      <div className="setup-actions">
+        <button
+          className="button button--primary"
+          disabled={busy}
+          onClick={() => void onVerifyToken(tokenInput || generatedToken || savedToken || undefined)}
+        >
+          Verify token and continue
+        </button>
+        <button className="button button--ghost" disabled={busy} onClick={() => void onRefreshState()}>
+          Retry current state
+        </button>
+      </div>
+
+      {error ? <p className="banner banner--error">{error}</p> : null}
+    </section>
   );
 }
