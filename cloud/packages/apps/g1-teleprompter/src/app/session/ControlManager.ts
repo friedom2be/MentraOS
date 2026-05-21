@@ -59,6 +59,7 @@ export class ControlManager {
   }
 
   handleExternalStateChange(): void {
+    this.clearTimers();
     this.display.showActiveScript(this.stateSync.getActiveScript());
     this.reconcileTimers();
   }
