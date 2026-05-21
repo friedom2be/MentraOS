@@ -25,7 +25,16 @@ describe('extractFromUrl', () => {
   test('rejects bracketed ipv6 private or local targets before fetching', async () => {
     await expect(extractFromUrl('http://[fc00::1]/private')).rejects.toThrow(/private or local address/);
     await expect(extractFromUrl('http://[fe80::1]/private')).rejects.toThrow(/private or local address/);
+    await expect(extractFromUrl('http://[febf::1]/private')).rejects.toThrow(/private or local address/);
     await expect(extractFromUrl('http://[::ffff:127.0.0.1]/private')).rejects.toThrow(/private or local address/);
+  });
+
+  test('rejects hostnames that resolve to private or local addresses', async () => {
+    await expect(
+      extractFromUrl('https://public.example/article', {
+        lookup: async () => [{address: '127.0.0.1', family: 4}],
+      }),
+    ).rejects.toThrow(/private or local address/);
   });
 
   test('rejects redirects into private targets', async () => {
