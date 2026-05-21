@@ -34,6 +34,19 @@ describe('routes', () => {
     expect(profile.setupComplete).toBe(false);
   });
 
+  test('POST /setup/init only shows the setup token once before verification', async () => {
+    const routes = createRoutes(createFakeDeps());
+
+    const firstResponse = await routes['/setup/init'].POST(new Request('http://localhost/setup/init', {method: 'POST'}));
+    const firstBody = await firstResponse.json();
+
+    const secondResponse = await routes['/setup/init'].POST(new Request('http://localhost/setup/init', {method: 'POST'}));
+
+    expect(firstResponse.status).toBe(200);
+    expect(firstBody.token).toBeTruthy();
+    expect(secondResponse.status).toBe(409);
+  });
+
   test('POST /setup/verify marks setup complete when the token matches', async () => {
     const routes = createRoutes(createFakeDeps());
     const initResponse = await routes['/setup/init'].POST(new Request('http://localhost/setup/init', {method: 'POST'}));
@@ -67,6 +80,34 @@ describe('routes', () => {
           text: 'Hello world',
           shouldSummarize: false,
         }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  test('POST /state/control requires bearer auth', async () => {
+    const routes = createRoutes(createFakeDeps());
+
+    const response = await routes['/state/control'].POST(
+      new Request('http://localhost/state/control', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({action: 'faster'}),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  test('POST /voice-command requires bearer auth', async () => {
+    const routes = createRoutes(createFakeDeps());
+
+    const response = await routes['/voice-command'].POST(
+      new Request('http://localhost/voice-command', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({command: 'pause'}),
       }),
     );
 
@@ -130,11 +171,15 @@ describe('routes', () => {
   test('POST /state/control applies persisted speed and chapter controls', async () => {
     activeScript = createActiveScript();
     const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
 
     const fasterResponse = await routes['/state/control'].POST(
       new Request('http://localhost/state/control', {
         method: 'POST',
-        headers: {'content-type': 'application/json'},
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
         body: JSON.stringify({action: 'faster'}),
       }),
     );
@@ -145,7 +190,10 @@ describe('routes', () => {
     const nextChapterResponse = await routes['/state/control'].POST(
       new Request('http://localhost/state/control', {
         method: 'POST',
-        headers: {'content-type': 'application/json'},
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
         body: JSON.stringify({action: 'next_chapter'}),
       }),
     );
@@ -199,6 +247,21 @@ function createActiveScript(): ActiveScript {
     wordCountDisplay: 2,
     updatedAt: '2026-05-21T12:00:00.000Z',
   };
+}
+
+async function initializeSetup(routes: ReturnType<typeof createRoutes>): Promise<string> {
+  const initResponse = await routes['/setup/init'].POST(new Request('http://localhost/setup/init', {method: 'POST'}));
+  const {token} = await initResponse.json();
+
+  await routes['/setup/verify'].POST(
+    new Request('http://localhost/setup/verify', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({token}),
+    }),
+  );
+
+  return token;
 }
 
 function createLoadedScript(input: unknown): ActiveScript {

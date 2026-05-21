@@ -94,6 +94,8 @@ export function createRoutes(deps: RouteDeps) {
     '/state/control': {
       POST: async (req: Request) =>
         await handleRoute(async () => {
+          const profile = deps.profileRepository.getProfile();
+          await requireBearerToken(req, profile.tokenHash);
           const {action} = parseControlRequest(await parseJsonBody(req));
           return Response.json(applyControl(action, deps));
         }),
@@ -101,6 +103,8 @@ export function createRoutes(deps: RouteDeps) {
     '/voice-command': {
       POST: async (req: Request) =>
         await handleRoute(async () => {
+          const profile = deps.profileRepository.getProfile();
+          await requireBearerToken(req, profile.tokenHash);
           const {command} = parseVoiceCommandRequest(await parseJsonBody(req));
           const action = normalizeVoiceCommand(command);
           if (!action) {
@@ -117,6 +121,10 @@ async function initSetup(deps: RouteDeps): Promise<{token: string; shortcutUrl: 
   const profile = deps.profileRepository.getProfile();
   if (profile.setupComplete) {
     throw Response.json({error: 'Setup already complete'}, {status: 409});
+  }
+
+  if (profile.tokenHash) {
+    throw Response.json({error: 'Setup token has already been shown'}, {status: 409});
   }
 
   const {plainToken, tokenHash} = await createSetupToken();
