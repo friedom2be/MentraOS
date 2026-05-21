@@ -16,7 +16,7 @@ import {ProfileRepository} from '../server/repositories/profile-repository';
 import {ScriptRepository} from '../server/repositories/script-repository';
 
 type AppProfileRepository = Pick<ProfileRepository, 'getProfile' | 'saveProfile'>;
-type AppScriptRepository = Pick<ScriptRepository, 'getActiveScript' | 'saveActiveScript'>;
+type AppScriptRepository = Pick<ScriptRepository, 'getActiveScript' | 'saveActiveScript' | 'clearActiveScript'>;
 
 interface RouteDeps {
   profileRepository: AppProfileRepository;
@@ -212,14 +212,8 @@ function applyControl(action: ControlAction, deps: RouteDeps): StateResponse {
       );
       break;
     case 'finished':
-      nextScript = updateScript(
-        nextScript,
-        (script) => ({
-          chapterIndex: Math.max(script.chapterList.length - 1, 0),
-          chunkIndex: Math.max(script.chunks.length - 1, 0),
-        }),
-        deps,
-      );
+      deps.scriptRepository.clearActiveScript();
+      nextScript = null;
       break;
     case 'pause':
     case 'resume':

@@ -67,6 +67,40 @@ describe('routes', () => {
     expect(profile.lastSetupAt).toBeDefined();
   });
 
+  test('POST /setup/reset requires explicit confirmation and resets setup state', async () => {
+    const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
+    const previousTokenHash = profile.tokenHash;
+
+    const rejectedResponse = await routes['/setup/reset'].POST(
+      new Request('http://localhost/setup/reset', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({confirmReset: false}),
+      }),
+    );
+
+    expect(rejectedResponse.status).toBe(400);
+
+    const response = await routes['/setup/reset'].POST(
+      new Request('http://localhost/setup/reset', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({confirmReset: true}),
+      }),
+    );
+    const body = await response.json();
+
+    expect(token).toBeTruthy();
+    expect(response.status).toBe(200);
+    expect(body.token).toMatch(/[A-Za-z0-9_-]{20,}/);
+    expect(body.profile.setupComplete).toBe(false);
+    expect(body.profile.lastSetupAt).toBeUndefined();
+    expect(profile.setupComplete).toBe(false);
+    expect(profile.tokenHash).toBeDefined();
+    expect(profile.tokenHash).not.toBe(previousTokenHash);
+  });
+
   test('POST /load requires bearer auth', async () => {
     const routes = createRoutes(createFakeDeps());
 
@@ -204,6 +238,29 @@ describe('routes', () => {
     expect(nextChapterBody.preview.currentChunk).toBe('chunk 3');
   });
 
+  test('POST /state/control clears the active script when finished is applied', async () => {
+    activeScript = createActiveScript();
+    const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
+
+    const response = await routes['/state/control'].POST(
+      new Request('http://localhost/state/control', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({action: 'finished'}),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.activeScript).toBeNull();
+    expect(body.preview).toBeNull();
+    expect(activeScript).toBeNull();
+  });
+
   function createFakeDeps() {
     return {
       profileRepository: {
@@ -217,6 +274,9 @@ describe('routes', () => {
         getActiveScript: () => activeScript,
         saveActiveScript(script: ActiveScript) {
           activeScript = script;
+        },
+        clearActiveScript() {
+          activeScript = null;
         },
       },
       loadScript: async (input: unknown) => {

@@ -6,6 +6,17 @@ import type {ActiveScriptRow} from './persistence-types';
 export class ScriptRepository {
   constructor(private readonly db: Database) {}
 
+  clearActiveScript(): void {
+    this.db
+      .query(
+        `
+          delete from active_script
+          where id = 1
+        `,
+      )
+      .run();
+  }
+
   private parseJson<T>(value: string, field: string): T {
     try {
       return JSON.parse(value) as T;
