@@ -24,9 +24,11 @@ describe('extractFromEpub', () => {
   </metadata>
   <manifest>
     <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
   <spine>
     <itemref idref="chapter1"/>
+    <itemref idref="chapter2"/>
   </spine>
 </package>`),
     );
@@ -40,15 +42,30 @@ describe('extractFromEpub', () => {
   </body>
 </html>`),
     );
+    zip.addFile(
+      'OEBPS/chapter2.xhtml',
+      Buffer.from(`<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1>Chapter 2</h1>
+    <p>Second chapter content.</p>
+  </body>
+</html>`),
+    );
 
     const result = await extractFromEpub(Uint8Array.from(zip.toBuffer()), 'Fallback');
     expect(result.title).toBe('Sample EPUB');
     expect(result.text).toContain('Chapter 1');
     expect(result.text).toContain('Hello teleprompter world.');
+    expect(result.text).toContain('Chapter 2');
     expect(result.chapters).toEqual([
       {
         title: 'Chapter 1',
         text: 'Chapter 1 Hello teleprompter world.',
+      },
+      {
+        title: 'Chapter 2',
+        text: 'Chapter 2 Second chapter content.',
       },
     ]);
   });

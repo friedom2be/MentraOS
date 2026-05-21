@@ -6,16 +6,9 @@ export interface DetectedChapter {
 }
 
 export function detectChapters(text: string, sourceType: ScriptSourceType): DetectedChapter[] {
-  if (sourceType === 'text') {
-    const markdownChapters = detectMarkdownChapters(text);
-    if (markdownChapters.length > 0) {
-      return markdownChapters;
-    }
-  }
-
-  const lineHeadingChapters = detectLineHeadingChapters(text);
-  if (lineHeadingChapters.length > 1) {
-    return lineHeadingChapters;
+  const markdownChapters = detectMarkdownChapters(text);
+  if (markdownChapters.length > 0) {
+    return markdownChapters;
   }
 
   return [
@@ -28,45 +21,35 @@ export function detectChapters(text: string, sourceType: ScriptSourceType): Dete
 
 function detectMarkdownChapters(text: string): DetectedChapter[] {
   const matches = [...text.matchAll(/^#\s+(.+)$/gm)];
+  if (matches.length === 0) {
+    return [];
+  }
 
-  return matches.map((match, index) => {
-    const start = match.index ?? 0;
-    const nextStart = matches[index + 1]?.index ?? text.length;
-    const title = match[1].trim();
+  const chapters: DetectedChapter[] = [];
+  const introText = text.slice(0, matches[0]?.index ?? 0).trim();
+  if (introText) {
+    chapters.push({
+      title: 'Intro',
+      text: introText,
+    });
+  }
+
+  chapters.push(
+    ...matches.map((match, index) => {
+      const start = match.index ?? 0;
+      const nextStart = matches[index + 1]?.index ?? text.length;
+      const title = match[1].trim();
     const body = text
       .slice(start, nextStart)
       .replace(/^#\s+.+$/m, '')
       .trim();
 
-    return {
-      title,
-      text: body,
-    };
-  });
-}
-
-function detectLineHeadingChapters(text: string): DetectedChapter[] {
-  const sections = text
-    .split(/\n{2,}/)
-    .map((section) => section.trim())
-    .filter(Boolean);
-
-  if (sections.length < 2) {
-    return [];
-  }
-
-  return sections
-    .map((section) => {
-      const [firstLine, ...rest] = section.split('\n');
-      if (!firstLine) {
-        return null;
-      }
-
-      const body = rest.join('\n').trim() || firstLine.trim();
       return {
-        title: firstLine.trim().slice(0, 80),
+        title,
         text: body,
       };
-    })
-    .filter((section): section is DetectedChapter => Boolean(section));
+    }),
+  );
+
+  return chapters.filter((chapter) => chapter.text.length > 0);
 }

@@ -49,9 +49,9 @@ interface ExtractedSource {
 
 export async function loadScript(input: LoadScriptInput, deps: LoadScriptDeps): Promise<ActiveScript> {
   const extracted = await resolveSource(input);
-  const scriptFamily = detectScriptFamily(extracted.text);
   const summarize = deps.summarize || summarizeText;
   const displayText = input.shouldSummarize ? await summarize(extracted.text, input.sourceType) : extracted.text;
+  const scriptFamily = detectScriptFamily(displayText);
   const displayChapters = resolveDisplayChapters({
     extracted,
     sourceType: input.sourceType,
