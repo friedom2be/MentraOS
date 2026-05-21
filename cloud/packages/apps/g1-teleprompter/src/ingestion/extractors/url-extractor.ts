@@ -24,7 +24,11 @@ interface RequestResult {
 interface UrlExtractorDeps {
   lookup?: (hostname: string) => Promise<LookupResult[]>;
   request?: (resolved: ResolvedUrl) => Promise<RequestResult>;
+  timeoutMs?: number;
 }
+
+const DEFAULT_TIMEOUT_MS = 10_000;
+const MAX_RESPONSE_BYTES = 1_000_000;
 
 export async function extractFromUrl(
   url: string,
@@ -72,7 +76,11 @@ async function requestWithSafeRedirects(
   redirectCount = 0,
 ): Promise<RequestResult> {
   const request = deps.request || defaultRequest;
-  const response = await request(resolved);
+  const response = await withTimeout(request(resolved), deps.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+
+  if (Buffer.byteLength(response.body, 'utf8') > MAX_RESPONSE_BYTES) {
+    throw new Error('Response body too large for URL ingestion');
+  }
 
   if (response.status >= 300 && response.status < 400) {
     if (redirectCount >= 3) {
@@ -138,13 +146,7 @@ function isPrivateOrLocalHost(hostname: string): boolean {
       return true;
     }
 
-    return (
-      host === '::1' ||
-      host === '::' ||
-      host.startsWith('fc') ||
-      host.startsWith('fd') ||
-      isIpv6LinkLocal(host)
-    );
+    return host === '::1' || host === '::' || isIpv6SpecialUse(host);
   }
 
   return false;
@@ -159,9 +161,12 @@ function isPrivateIpv4(host: string): boolean {
   return (
     a === 10 ||
     a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168)
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224
   );
 }
 
@@ -175,8 +180,58 @@ function isIpv6LinkLocal(host: string): boolean {
   return Number.isFinite(value) && value >= 0xfe80 && value <= 0xfebf;
 }
 
+function isIpv6SpecialUse(host: string): boolean {
+  const firstHextet = host.split(':')[0];
+  if (!firstHextet) {
+    return false;
+  }
+
+  const normalized = firstHextet.padStart(4, '0');
+  const value = parseInt(normalized, 16);
+  if (!Number.isFinite(value)) {
+    return false;
+  }
+
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) {
+    return true;
+  }
+
+  if (isIpv6LinkLocal(host)) {
+    return true;
+  }
+
+  if (value >= 0xfec0 && value <= 0xfeff) {
+    return true;
+  }
+
+  if (value >= 0xff00 && value <= 0xffff) {
+    return true;
+  }
+
+  return host.startsWith('2001:db8:');
+}
+
 async function defaultLookup(hostname: string): Promise<LookupResult[]> {
   return dnsLookup(hostname, {all: true, verbatim: true});
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`URL fetch timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }
 
 async function defaultRequest(resolved: ResolvedUrl): Promise<RequestResult> {
@@ -200,11 +255,21 @@ async function defaultRequest(resolved: ResolvedUrl): Promise<RequestResult> {
       },
       (response) => {
         const chunks: Uint8Array[] = [];
+        let totalLength = 0;
         response.on('data', (chunk) => {
-          chunks.push(Buffer.isBuffer(chunk) ? Uint8Array.from(chunk) : Uint8Array.from(Buffer.from(chunk)));
+          const normalizedChunk = Buffer.isBuffer(chunk)
+            ? Uint8Array.from(chunk)
+            : Uint8Array.from(Buffer.from(chunk));
+          totalLength += normalizedChunk.byteLength;
+
+          if (totalLength > MAX_RESPONSE_BYTES) {
+            request.destroy(new Error('Response body too large for URL ingestion'));
+            return;
+          }
+
+          chunks.push(normalizedChunk);
         });
         response.on('end', () => {
-          const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
           const combined = new Uint8Array(totalLength);
           let offset = 0;
           for (const chunk of chunks) {

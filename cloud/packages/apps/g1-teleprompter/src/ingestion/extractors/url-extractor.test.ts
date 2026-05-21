@@ -11,6 +11,13 @@ describe('extractFromUrl', () => {
     await expect(extractFromUrl('http://127.0.0.1:8080/private')).rejects.toThrow(/private or local address/);
   });
 
+  test('rejects reserved ipv4 ranges before fetching', async () => {
+    await expect(extractFromUrl('http://100.64.0.1/private')).rejects.toThrow(/private or local address/);
+    await expect(extractFromUrl('http://198.18.0.1/private')).rejects.toThrow(/private or local address/);
+    await expect(extractFromUrl('http://224.0.0.1/private')).rejects.toThrow(/private or local address/);
+    await expect(extractFromUrl('http://240.0.0.1/private')).rejects.toThrow(/private or local address/);
+  });
+
   test('rejects bracketed ipv6 loopback targets before fetching', async () => {
     await expect(extractFromUrl('http://[::1]/private')).rejects.toThrow(/private or local address/);
   });
@@ -20,6 +27,7 @@ describe('extractFromUrl', () => {
     await expect(extractFromUrl('http://[fe80::1]/private')).rejects.toThrow(/private or local address/);
     await expect(extractFromUrl('http://[febf::1]/private')).rejects.toThrow(/private or local address/);
     await expect(extractFromUrl('http://[::ffff:127.0.0.1]/private')).rejects.toThrow(/private or local address/);
+    await expect(extractFromUrl('http://[ff02::1]/private')).rejects.toThrow(/private or local address/);
   });
 
   test('rejects hostnames that resolve to private or local addresses', async () => {
@@ -62,6 +70,29 @@ describe('extractFromUrl', () => {
 
     expect(result.title).toBe('Sample');
     expect(result.text).toContain('Hello world.');
+  });
+
+  test('rejects oversized responses before readability parsing', async () => {
+    await expect(
+      extractFromUrl('https://example.com/article', {
+        lookup: async () => [{address: '93.184.216.34', family: 4}],
+        request: async () => ({
+          status: 200,
+          headers: {'content-type': 'text/html'},
+          body: 'x'.repeat(1_100_000),
+        }),
+      }),
+    ).rejects.toThrow(/Response body too large/);
+  });
+
+  test('times out slow requests', async () => {
+    await expect(
+      extractFromUrl('https://example.com/article', {
+        lookup: async () => [{address: '93.184.216.34', family: 4}],
+        request: async () => new Promise(() => {}),
+        timeoutMs: 1,
+      }),
+    ).rejects.toThrow(/timed out/);
   });
 
   test('uses the injected resolver and request path through redirects', async () => {
