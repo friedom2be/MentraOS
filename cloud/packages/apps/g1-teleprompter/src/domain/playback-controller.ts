@@ -73,9 +73,9 @@ export function applyControlAction(state: PlaybackState, action: PlaybackAction)
       return {...state, scrollSpeed: Math.max(state.scrollSpeed - 10, 60)};
     case 'save':
     case 'finished':
-      return state;
+      return {...state};
     default:
-      return state;
+      return {...state};
   }
 }
 

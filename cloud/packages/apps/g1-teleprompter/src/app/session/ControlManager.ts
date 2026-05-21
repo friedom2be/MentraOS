@@ -37,6 +37,8 @@ export class ControlManager {
       return await this.rewindChunk();
     }
 
+    this.clearTimers();
+
     const playback = this.stateSync.getPlayback();
     const activeScript = this.stateSync.getActiveScript();
     if (!playback || !activeScript) {

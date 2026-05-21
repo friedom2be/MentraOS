@@ -5,7 +5,7 @@ const VOICE_COMMANDS: Record<string, RuntimeControlType> = {
   resume: 'resume',
   play: 'resume',
   restart: 'restart',
-  repeat: 'restart',
+  repeat: 'repeat',
   next: 'next_chapter',
   next_chapter: 'next_chapter',
   faster: 'faster',

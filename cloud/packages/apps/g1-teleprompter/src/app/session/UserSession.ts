@@ -20,6 +20,8 @@ export class UserSession {
   private syncInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(appSession: AppSession, services: RuntimeServices, sessionId: string) {
+    UserSession.userSessions.get(appSession.userId)?.dispose();
+
     this.appSession = appSession;
     this.userId = appSession.userId;
     this.sessionId = sessionId;

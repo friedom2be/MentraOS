@@ -2,7 +2,7 @@ import type {TeleprompterProfile} from '../domain/types';
 import {normalizeVoiceCommand as normalizeRuntimeVoiceCommand} from '../domain/voice-commands';
 import type {LoadScriptInput} from '../ingestion/load-script';
 
-const CONTROL_ACTIONS = ['pause', 'resume', 'restart', 'next_chapter', 'faster', 'slower', 'save', 'finished'] as const;
+const CONTROL_ACTIONS = ['pause', 'resume', 'restart', 'repeat', 'next_chapter', 'faster', 'slower', 'save', 'finished'] as const;
 
 export type ControlAction = (typeof CONTROL_ACTIONS)[number];
 
