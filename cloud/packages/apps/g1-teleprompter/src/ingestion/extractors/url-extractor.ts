@@ -1,6 +1,8 @@
 import {Readability} from '@mozilla/readability';
 import {JSDOM} from 'jsdom';
 import {lookup as dnsLookup} from 'node:dns/promises';
+import http from 'node:http';
+import https from 'node:https';
 import {isIP} from 'node:net';
 
 interface LookupResult {
@@ -8,20 +10,32 @@ interface LookupResult {
   family: number;
 }
 
+interface ResolvedUrl {
+  url: URL;
+  resolvedAddress: LookupResult;
+}
+
+interface RequestResult {
+  status: number;
+  headers: Record<string, string | string[] | undefined>;
+  body: string;
+}
+
 interface UrlExtractorDeps {
   lookup?: (hostname: string) => Promise<LookupResult[]>;
+  request?: (resolved: ResolvedUrl) => Promise<RequestResult>;
 }
 
 export async function extractFromUrl(
   url: string,
   deps: UrlExtractorDeps = {},
 ): Promise<{title: string; text: string}> {
-  const response = await fetchWithSafeRedirects(await validatePublicHttpUrl(url, deps));
-  if (!response.ok) {
+  const response = await requestWithSafeRedirects(await validatePublicHttpUrl(url, deps), deps);
+  if (response.status < 200 || response.status >= 300) {
     throw new Error(`URL fetch failed with status ${response.status}`);
   }
 
-  const html = await response.text();
+  const html = response.body;
   const dom = new JSDOM(html, {url});
   const reader = new Readability(dom.window.document);
   const article = reader.parse();
@@ -36,45 +50,53 @@ export async function extractFromUrl(
   };
 }
 
-async function validatePublicHttpUrl(input: string, deps: UrlExtractorDeps): Promise<URL> {
-  const parsed = new URL(input);
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+async function validatePublicHttpUrl(input: string, deps: UrlExtractorDeps): Promise<ResolvedUrl> {
+  const url = new URL(input);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error('Unsupported URL protocol');
   }
 
-  if (isPrivateOrLocalHost(parsed.hostname)) {
+  if (isPrivateOrLocalHost(url.hostname)) {
     throw new Error('URL points to a private or local address');
   }
 
-  await assertPublicHostname(parsed.hostname, deps);
-
-  return parsed;
+  return {
+    url,
+    resolvedAddress: await resolvePublicHostname(url.hostname, deps),
+  };
 }
 
-async function fetchWithSafeRedirects(url: URL, redirectCount = 0, deps: UrlExtractorDeps = {}): Promise<Response> {
-  const response = await fetch(url.toString(), {redirect: 'manual'});
+async function requestWithSafeRedirects(
+  resolved: ResolvedUrl,
+  deps: UrlExtractorDeps,
+  redirectCount = 0,
+): Promise<RequestResult> {
+  const request = deps.request || defaultRequest;
+  const response = await request(resolved);
 
   if (response.status >= 300 && response.status < 400) {
     if (redirectCount >= 3) {
       throw new Error('Too many redirects while fetching URL');
     }
 
-    const location = response.headers.get('location');
+    const locationHeader = response.headers.location;
+    const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader;
     if (!location) {
       throw new Error('Redirect response missing location header');
     }
 
-    const redirectedUrl = await validatePublicHttpUrl(new URL(location, url).toString(), deps);
-    return fetchWithSafeRedirects(redirectedUrl, redirectCount + 1, deps);
+    const redirectedUrl = await validatePublicHttpUrl(new URL(location, resolved.url).toString(), deps);
+    return requestWithSafeRedirects(redirectedUrl, deps, redirectCount + 1);
   }
 
   return response;
 }
 
-async function assertPublicHostname(hostname: string, deps: UrlExtractorDeps): Promise<void> {
+async function resolvePublicHostname(hostname: string, deps: UrlExtractorDeps): Promise<LookupResult> {
   const host = normalizeHostname(hostname);
-  if (isIP(host) !== 0) {
-    return;
+  const ipVersion = isIP(host);
+  if (ipVersion === 4 || ipVersion === 6) {
+    return {address: host, family: ipVersion};
   }
 
   const lookup = deps.lookup || defaultLookup;
@@ -83,6 +105,13 @@ async function assertPublicHostname(hostname: string, deps: UrlExtractorDeps): P
   if (addresses.some((result) => isPrivateOrLocalHost(result.address))) {
     throw new Error('URL points to a private or local address');
   }
+
+  const firstAddress = addresses[0];
+  if (!firstAddress) {
+    throw new Error('Unable to resolve URL hostname');
+  }
+
+  return firstAddress;
 }
 
 function isPrivateOrLocalHost(hostname: string): boolean {
@@ -148,4 +177,51 @@ function isIpv6LinkLocal(host: string): boolean {
 
 async function defaultLookup(hostname: string): Promise<LookupResult[]> {
   return dnsLookup(hostname, {all: true, verbatim: true});
+}
+
+async function defaultRequest(resolved: ResolvedUrl): Promise<RequestResult> {
+  const transport = resolved.url.protocol === 'https:' ? https : http;
+
+  return new Promise<RequestResult>((resolve, reject) => {
+    const request = transport.request(
+      {
+        protocol: resolved.url.protocol,
+        hostname: resolved.url.hostname,
+        port: resolved.url.port,
+        path: `${resolved.url.pathname}${resolved.url.search}`,
+        method: 'GET',
+        headers: {
+          accept: 'text/html,application/xhtml+xml',
+          'user-agent': 'MentraOS Teleprompter/0.1',
+        },
+        lookup: (_hostname, _options, callback) => {
+          callback(null, resolved.resolvedAddress.address, resolved.resolvedAddress.family);
+        },
+      },
+      (response) => {
+        const chunks: Uint8Array[] = [];
+        response.on('data', (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? Uint8Array.from(chunk) : Uint8Array.from(Buffer.from(chunk)));
+        });
+        response.on('end', () => {
+          const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+          const combined = new Uint8Array(totalLength);
+          let offset = 0;
+          for (const chunk of chunks) {
+            combined.set(chunk, offset);
+            offset += chunk.byteLength;
+          }
+
+          resolve({
+            status: response.statusCode || 0,
+            headers: response.headers,
+            body: new TextDecoder().decode(combined),
+          });
+        });
+      },
+    );
+
+    request.on('error', reject);
+    request.end();
+  });
 }

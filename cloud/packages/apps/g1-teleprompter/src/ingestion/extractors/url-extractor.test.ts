@@ -1,13 +1,6 @@
-import {afterEach, describe, expect, mock, test} from 'bun:test';
+import {describe, expect, test} from 'bun:test';
 
 import {extractFromUrl} from './url-extractor';
-
-const originalFetch = globalThis.fetch;
-
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-  mock.restore();
-});
 
 describe('extractFromUrl', () => {
   test('rejects non-http schemes before fetching', async () => {
@@ -38,36 +31,76 @@ describe('extractFromUrl', () => {
   });
 
   test('rejects redirects into private targets', async () => {
-    globalThis.fetch = mock(async () => {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          location: 'http://localhost/internal',
-        },
-      });
-    }) as unknown as typeof fetch;
-
-    await expect(extractFromUrl('https://example.com/article')).rejects.toThrow(/private or local address/);
+    await expect(
+      extractFromUrl('https://example.com/article', {
+        lookup: async (hostname) => [{address: hostname === 'example.com' ? '93.184.216.34' : '127.0.0.1', family: 4}],
+        request: async () => ({
+          status: 302,
+          headers: {
+            location: 'http://localhost/internal',
+          },
+          body: '',
+        }),
+      }),
+    ).rejects.toThrow(/private or local address/);
   });
 
   test('extracts article text from a public html response', async () => {
-    globalThis.fetch = mock(async () => {
-      return new Response(
-        `
+    const result = await extractFromUrl('https://example.com/article', {
+      lookup: async () => [{address: '93.184.216.34', family: 4}],
+      request: async () => ({
+        status: 200,
+        headers: {'content-type': 'text/html'},
+        body: `
           <html>
             <head><title>Sample</title></head>
             <body><article><h1>Headline</h1><p>Hello world.</p></article></body>
           </html>
         `,
-        {
-          status: 200,
-          headers: {'content-type': 'text/html'},
-        },
-      );
-    }) as unknown as typeof fetch;
+      }),
+    });
 
-    const result = await extractFromUrl('https://example.com/article');
     expect(result.title).toBe('Sample');
     expect(result.text).toContain('Hello world.');
+  });
+
+  test('uses the injected resolver and request path through redirects', async () => {
+    const lookups: string[] = [];
+    const requests: Array<{hostname: string; address: string}> = [];
+
+    const result = await extractFromUrl('https://example.com/start', {
+      lookup: async (hostname) => {
+        lookups.push(hostname);
+        if (hostname === 'example.com') {
+          return [{address: '93.184.216.34', family: 4}];
+        }
+
+        return [{address: '93.184.216.35', family: 4}];
+      },
+      request: async ({url, resolvedAddress}) => {
+        requests.push({hostname: url.hostname, address: resolvedAddress.address});
+
+        if (url.hostname === 'example.com') {
+          return {
+            status: 302,
+            headers: {location: 'https://redirect.example/final'},
+            body: '',
+          };
+        }
+
+        return {
+          status: 200,
+          headers: {'content-type': 'text/html'},
+          body: '<html><head><title>Redirected</title></head><body><article><p>Resolved safely.</p></article></body></html>',
+        };
+      },
+    });
+
+    expect(lookups).toEqual(['example.com', 'redirect.example']);
+    expect(requests).toEqual([
+      {hostname: 'example.com', address: '93.184.216.34'},
+      {hostname: 'redirect.example', address: '93.184.216.35'},
+    ]);
+    expect(result.text).toContain('Resolved safely.');
   });
 });
