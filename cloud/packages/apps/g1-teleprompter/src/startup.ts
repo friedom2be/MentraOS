@@ -22,6 +22,22 @@ export function shouldStartAppServer(config: StartupConfig): boolean {
   return Boolean(config.apiKey);
 }
 
+interface ProxyRequest {
+  method: string;
+  originalUrl?: string;
+  url: string;
+  headers: Record<string, string | string[] | undefined>;
+  body?: unknown;
+  authUserId?: string;
+  activeSession?: unknown;
+}
+
+interface ProxyResponse {
+  setHeader(name: string, value: string): void;
+  status(code: number): ProxyResponse;
+  send(body?: string | Uint8Array | Buffer): void;
+}
+
 function buildProxyHeaders({
   headers,
   authUserId,
@@ -34,7 +50,7 @@ function buildProxyHeaders({
   const proxyHeaders: Record<string, string> = {};
 
   Object.entries(headers).forEach(([key, value]) => {
-    if (value) {
+    if (value && key !== 'content-length' && key !== 'host') {
       proxyHeaders[key] = Array.isArray(value) ? value.join(', ') : value;
     }
   });
@@ -50,19 +66,44 @@ function buildProxyHeaders({
   return proxyHeaders;
 }
 
+function buildProxyBody(req: ProxyRequest): BodyInit | undefined {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.body == null) {
+    return undefined;
+  }
+
+  if (typeof req.body === 'string') {
+    return req.body;
+  }
+
+  if (req.body instanceof Uint8Array) {
+    return new Blob([Uint8Array.from(req.body)]);
+  }
+
+  if (req.body instanceof ArrayBuffer) {
+    return req.body.slice(0);
+  }
+
+  if (ArrayBuffer.isView(req.body)) {
+    return new Blob([
+      Uint8Array.from(new Uint8Array(req.body.buffer, req.body.byteOffset, req.body.byteLength)),
+    ]);
+  }
+
+  return JSON.stringify(req.body);
+}
+
 export function createProxyHandler(bunPort: number) {
-  return async (req: any, res: any) => {
+  return async (req: ProxyRequest, res: ProxyResponse) => {
     try {
       const bunUrl = `http://localhost:${bunPort}${req.originalUrl || req.url}`;
-      const authReq = req as typeof req & {authUserId?: string; activeSession?: unknown};
       const response = await fetch(bunUrl, {
         method: req.method,
         headers: buildProxyHeaders({
-          headers: req.headers as Record<string, string | string[] | undefined>,
-          authUserId: authReq.authUserId,
-          hasActiveSession: Boolean(authReq.activeSession),
+          headers: req.headers,
+          authUserId: req.authUserId,
+          hasActiveSession: Boolean(req.activeSession),
         }),
-        body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
+        body: buildProxyBody(req),
       });
 
       response.headers.forEach((value, key) => {
@@ -70,7 +111,7 @@ export function createProxyHandler(bunPort: number) {
       });
 
       res.status(response.status);
-      res.send(await response.text());
+      res.send(Buffer.from(await response.arrayBuffer()));
     } catch (error) {
       console.error('[g1-teleprompter] Proxy error:', error);
       res.status(500).send('Proxy error');
