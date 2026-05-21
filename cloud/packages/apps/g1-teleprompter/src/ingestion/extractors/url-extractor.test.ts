@@ -95,6 +95,30 @@ describe('extractFromUrl', () => {
     ).rejects.toThrow(/timed out/);
   });
 
+  test('aborts the in-flight request when a timeout fires', async () => {
+    let aborted = false;
+
+    await expect(
+      extractFromUrl('https://example.com/article', {
+        lookup: async () => [{address: '93.184.216.34', family: 4}],
+        request: async (_resolved, signal) =>
+          await new Promise((_, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                aborted = true;
+                reject(signal.reason);
+              },
+              {once: true},
+            );
+          }),
+        timeoutMs: 1,
+      }),
+    ).rejects.toThrow(/timed out/);
+
+    expect(aborted).toBe(true);
+  });
+
   test('uses the injected resolver and request path through redirects', async () => {
     const lookups: string[] = [];
     const requests: Array<{hostname: string; address: string}> = [];

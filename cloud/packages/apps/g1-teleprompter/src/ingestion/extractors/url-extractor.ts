@@ -23,7 +23,7 @@ interface RequestResult {
 
 interface UrlExtractorDeps {
   lookup?: (hostname: string) => Promise<LookupResult[]>;
-  request?: (resolved: ResolvedUrl) => Promise<RequestResult>;
+  request?: (resolved: ResolvedUrl, signal: AbortSignal) => Promise<RequestResult>;
   timeoutMs?: number;
 }
 
@@ -76,7 +76,7 @@ async function requestWithSafeRedirects(
   redirectCount = 0,
 ): Promise<RequestResult> {
   const request = deps.request || defaultRequest;
-  const response = await withTimeout(request(resolved), deps.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const response = await requestWithTimeout(request, resolved, deps.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   if (Buffer.byteLength(response.body, 'utf8') > MAX_RESPONSE_BYTES) {
     throw new Error('Response body too large for URL ingestion');
@@ -215,29 +215,55 @@ async function defaultLookup(hostname: string): Promise<LookupResult[]> {
   return dnsLookup(hostname, {all: true, verbatim: true});
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return await new Promise<T>((resolve, reject) => {
+async function requestWithTimeout(
+  request: (resolved: ResolvedUrl, signal: AbortSignal) => Promise<RequestResult>,
+  resolved: ResolvedUrl,
+  timeoutMs: number,
+): Promise<RequestResult> {
+  const controller = new AbortController();
+  const timeoutError = new Error(`URL fetch timed out after ${timeoutMs}ms`);
+
+  return await new Promise<RequestResult>((resolve, reject) => {
+    let settled = false;
+
     const timeout = setTimeout(() => {
-      reject(new Error(`URL fetch timed out after ${timeoutMs}ms`));
+      settled = true;
+      controller.abort(timeoutError);
+      reject(timeoutError);
     }, timeoutMs);
 
-    promise.then(
+    request(resolved, controller.signal).then(
       (value) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
         clearTimeout(timeout);
         resolve(value);
       },
       (error) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
         clearTimeout(timeout);
-        reject(error);
+        reject(controller.signal.aborted ? timeoutError : error);
       },
     );
   });
 }
 
-async function defaultRequest(resolved: ResolvedUrl): Promise<RequestResult> {
+async function defaultRequest(resolved: ResolvedUrl, signal: AbortSignal): Promise<RequestResult> {
   const transport = resolved.url.protocol === 'https:' ? https : http;
 
   return new Promise<RequestResult>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Request aborted'));
+      return;
+    }
+
     const request = transport.request(
       {
         protocol: resolved.url.protocol,
@@ -270,6 +296,7 @@ async function defaultRequest(resolved: ResolvedUrl): Promise<RequestResult> {
           chunks.push(normalizedChunk);
         });
         response.on('end', () => {
+          cleanup();
           const combined = new Uint8Array(totalLength);
           let offset = 0;
           for (const chunk of chunks) {
@@ -286,7 +313,21 @@ async function defaultRequest(resolved: ResolvedUrl): Promise<RequestResult> {
       },
     );
 
-    request.on('error', reject);
+    const abortRequest = () => {
+      request.destroy(signal.reason instanceof Error ? signal.reason : new Error('Request aborted'));
+    };
+
+    signal.addEventListener('abort', abortRequest, {once: true});
+
+    const cleanup = () => {
+      signal.removeEventListener('abort', abortRequest);
+    };
+
+    request.on('close', cleanup);
+    request.on('error', (error) => {
+      cleanup();
+      reject(error);
+    });
     request.end();
   });
 }
