@@ -97,6 +97,58 @@ describe('ControlManager', () => {
     expect(state.playback?.chunkIndex).toBe(2);
     expect(timers.pendingCount()).toBe(0);
   });
+
+  test('manual advance on the final chunk pauses cleanly without arming timers', async () => {
+    const timers = installFakeTimers();
+    const state = createFakeState({
+      playback: {
+        chapterIndex: 0,
+        chunkIndex: 1,
+        scrollSpeed: 120,
+        status: 'playing',
+      },
+      activeScript: createScript({
+        chunks: ['one two three', 'four five six'],
+        chapterList: [{title: 'Full Script', startChunkIndex: 0, endChunkIndex: 1}],
+        chunkIndex: 1,
+      }),
+    });
+    const display = createDisplaySpy();
+
+    const control = new ControlManager(state as never, display as never, createLogger() as never);
+
+    await control.apply('advance_chunk');
+
+    expect(state.playback?.status).toBe('paused');
+    expect(state.playback?.chunkIndex).toBe(1);
+    expect(display.cleared).toBe(false);
+    expect(timers.pendingCount()).toBe(0);
+  });
+
+  test('uses playback chunk duration when rendering timed playback updates', async () => {
+    const timers = installFakeTimers();
+    const state = createFakeState({
+      playback: {
+        chapterIndex: 0,
+        chunkIndex: 0,
+        scrollSpeed: 60,
+        status: 'playing',
+      },
+      activeScript: createScript({
+        chunks: ['one two three four five six', 'next chunk'],
+        chapterList: [{title: 'Full Script', startChunkIndex: 0, endChunkIndex: 1}],
+      }),
+    });
+    const display = createDisplaySpy();
+
+    const control = new ControlManager(state as never, display as never, createLogger() as never);
+
+    control.handleExternalStateChange();
+
+    expect(display.lastShown?.text).toBe('one two three four five six');
+    expect(display.lastShown?.durationMs).toBe(6000);
+    expect(timers.pendingCount()).toBe(1);
+  });
 });
 
 function createFakeState({
@@ -169,6 +221,27 @@ function createScript(overrides: Partial<ActiveScript>): ActiveScript {
 function createLogger() {
   return {
     warn() {},
+  };
+}
+
+function createDisplaySpy() {
+  return {
+    cleared: false,
+    lastShown: null as null | {text: string; durationMs?: number},
+    clear() {
+      this.cleared = true;
+    },
+    showActiveScript(activeScript: ActiveScript | null, durationMs?: number) {
+      if (!activeScript) {
+        this.clear();
+        return;
+      }
+
+      this.lastShown = {
+        text: activeScript.chunks[activeScript.chunkIndex] ?? '',
+        durationMs,
+      };
+    },
   };
 }
 

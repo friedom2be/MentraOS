@@ -5,20 +5,20 @@ import type {ActiveScript} from '../../domain/types';
 export class DisplayManager {
   constructor(private readonly session: AppSession) {}
 
-  showChunk(text: string): void {
+  showChunk(text: string, durationMs = 20_000): void {
     this.session.layouts.showTextWall(text, {
-      durationMs: 20000,
+      durationMs,
       view: ViewType.MAIN,
     });
   }
 
-  showActiveScript(activeScript: ActiveScript | null): void {
+  showActiveScript(activeScript: ActiveScript | null, durationMs?: number): void {
     if (!activeScript) {
       this.clear();
       return;
     }
 
-    this.showChunk(activeScript.chunks[activeScript.chunkIndex] ?? '');
+    this.showChunk(activeScript.chunks[activeScript.chunkIndex] ?? '', durationMs);
   }
 
   clear(): void {

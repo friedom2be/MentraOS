@@ -53,14 +53,14 @@ export class ControlManager {
     }
 
     this.stateSync.updatePlayback(nextPlayback);
-    this.display.showActiveScript(this.stateSync.getActiveScript());
+    this.showCurrentScript();
     this.reconcileTimers();
     return true;
   }
 
   handleExternalStateChange(): void {
     this.clearTimers();
-    this.display.showActiveScript(this.stateSync.getActiveScript());
+    this.showCurrentScript();
     this.reconcileTimers();
   }
 
@@ -79,6 +79,10 @@ export class ControlManager {
 
     if (playback.chunkIndex >= activeScript.chunks.length - 1) {
       if (pauseForInteraction) {
+        if (playback.status !== 'paused') {
+          this.stateSync.updatePlayback({...playback, status: 'paused'});
+          this.showCurrentScript();
+        }
         return true;
       }
 
@@ -100,7 +104,7 @@ export class ControlManager {
 
     const shouldResume = pauseForInteraction && playback.status === 'playing';
     this.stateSync.updatePlayback(nextPlayback);
-    this.display.showActiveScript(this.stateSync.getActiveScript());
+    this.showCurrentScript();
 
     if (shouldResume) {
       this.scheduleResumeAfterInteraction();
@@ -134,7 +138,7 @@ export class ControlManager {
 
     const shouldResume = playback.status === 'playing';
     this.stateSync.updatePlayback(nextPlayback);
-    this.display.showActiveScript(this.stateSync.getActiveScript());
+    this.showCurrentScript();
 
     if (shouldResume) {
       this.scheduleResumeAfterInteraction();
@@ -207,6 +211,16 @@ export class ControlManager {
         this.logger.warn({type}, 'Unsupported teleprompter control action');
         return {type: 'save'};
     }
+  }
+
+  private showCurrentScript(): void {
+    const activeScript = this.stateSync.getActiveScript();
+    const playback = this.stateSync.getPlayback();
+    const currentChunk = activeScript && playback ? activeScript.chunks[playback.chunkIndex] ?? '' : '';
+    const durationMs =
+      activeScript && playback ? calculateChunkDurationMs(currentChunk, playback.scrollSpeed) : undefined;
+
+    this.display.showActiveScript(activeScript, durationMs);
   }
 }
 
