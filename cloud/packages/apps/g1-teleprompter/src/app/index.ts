@@ -19,7 +19,7 @@ export class G1TeleprompterApp extends AppServer {
     sessionId: string,
     userId: string,
   ): Promise<void> {
-    console.log(`[G1TeleprompterApp] Session started for user ${userId} (${sessionId})`);
+    this.logger.info({userId, sessionId}, 'G1 teleprompter session started');
   }
 
   protected override async onStop(
@@ -27,7 +27,7 @@ export class G1TeleprompterApp extends AppServer {
     userId: string,
     reason: string,
   ): Promise<void> {
-    console.log(`[G1TeleprompterApp] Session stopped for user ${userId} (${sessionId}): ${reason}`);
+    this.logger.info({userId, sessionId, reason}, 'G1 teleprompter session stopped');
     await super.onStop(sessionId, userId, reason);
   }
 }
