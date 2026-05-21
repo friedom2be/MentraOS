@@ -1,4 +1,5 @@
 import type {TeleprompterProfile} from '../domain/types';
+import {normalizeVoiceCommand as normalizeRuntimeVoiceCommand} from '../domain/voice-commands';
 import type {LoadScriptInput} from '../ingestion/load-script';
 
 const CONTROL_ACTIONS = ['pause', 'resume', 'restart', 'next_chapter', 'faster', 'slower', 'save', 'finished'] as const;
@@ -58,17 +59,8 @@ export function parseVoiceCommandRequest(input: unknown): VoiceCommandRequest {
 }
 
 export function normalizeVoiceCommand(command: string): ControlAction | null {
-  const normalized = command.trim().toLowerCase().replace(/\s+/g, '_');
-
-  if (normalized === 'next' || normalized === 'next_chapter') {
-    return 'next_chapter';
-  }
-
-  if (normalized === 'play') {
-    return 'resume';
-  }
-
-  return isControlAction(normalized) ? normalized : null;
+  const normalized = normalizeRuntimeVoiceCommand(command);
+  return normalized && isControlAction(normalized) ? normalized : null;
 }
 
 export function parseLoadRequest(input: unknown, profile: TeleprompterProfile): LoadScriptInput {

@@ -1,10 +1,14 @@
 import {AppServer, AppSession} from '@mentra/sdk';
 
-/**
- * Minimal app server scaffold for the teleprompter package.
- * Runtime session behavior is added in later tasks.
- */
+import {createDatabase} from '../server/db';
+import {ProfileRepository} from '../server/repositories/profile-repository';
+import {ScriptRepository} from '../server/repositories/script-repository';
+import {UserSession} from './session/UserSession';
+import type {RuntimeServices} from './session/StateSync';
+
 export class G1TeleprompterApp extends AppServer {
+  private readonly services: RuntimeServices;
+
   constructor(config: {packageName: string; apiKey: string; port: number}) {
     super({
       packageName: config.packageName,
@@ -12,13 +16,21 @@ export class G1TeleprompterApp extends AppServer {
       port: config.port,
       publicDir: false,
     });
+
+    const database = createDatabase(process.env.DATABASE_PATH || './teleprompter.sqlite');
+    this.services = {
+      profileRepository: new ProfileRepository(database),
+      scriptRepository: new ScriptRepository(database),
+    };
   }
 
   protected override async onSession(
-    _session: AppSession,
+    session: AppSession,
     sessionId: string,
     userId: string,
   ): Promise<void> {
+    const userSession = new UserSession(session, this.services, sessionId);
+    await userSession.initialize();
     this.logger.info({userId, sessionId}, 'G1 teleprompter session started');
   }
 
@@ -28,6 +40,7 @@ export class G1TeleprompterApp extends AppServer {
     reason: string,
   ): Promise<void> {
     this.logger.info({userId, sessionId, reason}, 'G1 teleprompter session stopped');
+    UserSession.getUserSessionIfMatches(userId, sessionId)?.dispose();
     await super.onStop(sessionId, userId, reason);
   }
 }

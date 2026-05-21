@@ -10,6 +10,7 @@ import {
   type ControlAction,
 } from './request-parsing';
 import type {ActiveScript, TeleprompterProfile} from '../domain/types';
+import {UserSession} from '../app/session/UserSession';
 import {loadScript as runLoadScript, type LoadScriptInput} from '../ingestion/load-script';
 import {createDatabase} from '../server/db';
 import {ProfileRepository} from '../server/repositories/profile-repository';
@@ -104,7 +105,7 @@ export function createRoutes(deps: RouteDeps) {
           const profile = deps.profileRepository.getProfile();
           await requireBearerToken(req, profile.tokenHash);
           const {action} = parseControlRequest(await parseJsonBody(req));
-          return Response.json(applyControl(action, deps));
+          return Response.json(await applyControl(action, deps));
         }),
     },
     '/voice-command': {
@@ -118,7 +119,7 @@ export function createRoutes(deps: RouteDeps) {
             throw Response.json({error: 'Unsupported voice command'}, {status: 400});
           }
 
-          return Response.json(applyControl(action, deps));
+          return Response.json(await applyControl(action, deps));
         }),
     },
   };
@@ -185,7 +186,12 @@ function getState(deps: RouteDeps): StateResponse {
   return buildStateResponse(profile, activeScript);
 }
 
-function applyControl(action: ControlAction, deps: RouteDeps): StateResponse {
+async function applyControl(action: ControlAction, deps: RouteDeps): Promise<StateResponse> {
+  const runtimeApplied = await UserSession.applyControlToAll(action);
+  if (runtimeApplied) {
+    return getState(deps);
+  }
+
   const currentProfile = deps.profileRepository.getProfile();
   let nextProfile = currentProfile;
   let nextScript = deps.scriptRepository.getActiveScript();
