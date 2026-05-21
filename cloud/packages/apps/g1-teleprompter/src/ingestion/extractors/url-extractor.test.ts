@@ -18,6 +18,16 @@ describe('extractFromUrl', () => {
     await expect(extractFromUrl('http://127.0.0.1:8080/private')).rejects.toThrow(/private or local address/);
   });
 
+  test('rejects bracketed ipv6 loopback targets before fetching', async () => {
+    await expect(extractFromUrl('http://[::1]/private')).rejects.toThrow(/private or local address/);
+  });
+
+  test('rejects bracketed ipv6 private or local targets before fetching', async () => {
+    await expect(extractFromUrl('http://[fc00::1]/private')).rejects.toThrow(/private or local address/);
+    await expect(extractFromUrl('http://[fe80::1]/private')).rejects.toThrow(/private or local address/);
+    await expect(extractFromUrl('http://[::ffff:127.0.0.1]/private')).rejects.toThrow(/private or local address/);
+  });
+
   test('rejects redirects into private targets', async () => {
     globalThis.fetch = mock(async () => {
       return new Response(null, {

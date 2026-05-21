@@ -57,7 +57,7 @@ async function fetchWithSafeRedirects(url: URL, redirectCount = 0): Promise<Resp
 }
 
 function isPrivateOrLocalHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
+  const host = normalizeHostname(hostname);
   if (
     host === 'localhost' ||
     host === '0.0.0.0' ||
@@ -72,19 +72,31 @@ function isPrivateOrLocalHost(hostname: string): boolean {
 
   const ipVersion = isIP(host);
   if (ipVersion === 4) {
-    const [a, b] = host.split('.').map((part) => parseInt(part, 10));
-    return (
-      a === 10 ||
-      a === 127 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168)
-    );
+    return isPrivateIpv4(host);
   }
 
   if (ipVersion === 6) {
+    if (host.startsWith('::ffff:')) {
+      return true;
+    }
+
     return host === '::1' || host === '::' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:');
   }
 
   return false;
+}
+
+function normalizeHostname(hostname: string): string {
+  return hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '').replace(/\.$/, '');
+}
+
+function isPrivateIpv4(host: string): boolean {
+  const [a, b] = host.split('.').map((part) => parseInt(part, 10));
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
 }
