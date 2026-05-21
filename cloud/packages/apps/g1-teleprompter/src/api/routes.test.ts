@@ -197,6 +197,35 @@ describe('routes', () => {
     expect(response.status).toBe(401);
   });
 
+  test('POST /settings persists toggle updates into profile state', async () => {
+    const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
+
+    const response = await routes['/settings'].POST(
+      new Request('http://localhost/settings', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          summarizeArticles: true,
+          summarizeEpubs: true,
+          volumeButtonMode: true,
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.profile.summarizeArticles).toBe(true);
+    expect(body.profile.summarizeEpubs).toBe(true);
+    expect(body.profile.volumeButtonMode).toBe(true);
+    expect(profile.summarizeArticles).toBe(true);
+    expect(profile.summarizeEpubs).toBe(true);
+    expect(profile.volumeButtonMode).toBe(true);
+  });
+
   test('POST /load accepts a text payload and stores preview state', async () => {
     const routes = createRoutes(createFakeDeps());
     const initResponse = await routes['/setup/init'].POST(new Request('http://localhost/setup/init', {method: 'POST'}));
@@ -254,6 +283,7 @@ describe('routes', () => {
     expect(body.profile.scrollSpeed).toBe(120);
     expect(body.activeScript?.sourceTitle).toBe('Draft');
     expect(body.preview.currentChunk).toBe('chunk 1');
+    expect(body.preview.percentageComplete).toBe(0);
   });
 
   test('POST /state/control applies persisted speed and chapter controls', async () => {
@@ -290,6 +320,32 @@ describe('routes', () => {
     expect(nextChapterBody.activeScript.chapterIndex).toBe(1);
     expect(nextChapterBody.activeScript.chunkIndex).toBe(2);
     expect(nextChapterBody.preview.currentChunk).toBe('chunk 3');
+    expect(nextChapterBody.preview.percentageComplete).toBe(100);
+  });
+
+  test('POST /state/control can jump to a target percentage before playback begins', async () => {
+    activeScript = createPercentScript();
+    const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
+
+    const response = await routes['/state/control'].POST(
+      new Request('http://localhost/state/control', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({action: 'jump_to_percent', percentage: 50}),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.activeScript.chapterIndex).toBe(1);
+    expect(body.activeScript.chunkIndex).toBe(2);
+    expect(body.preview.currentChunk).toBe('chunk 3');
+    expect(body.preview.globalChunkIndex).toBe(2);
+    expect(body.preview.percentageComplete).toBe(50);
   });
 
   test('POST /state/control clears the active script when finished is applied', async () => {
@@ -313,6 +369,32 @@ describe('routes', () => {
     expect(body.activeScript).toBeNull();
     expect(body.preview).toBeNull();
     expect(activeScript).toBeNull();
+  });
+
+  test('POST /settings persists teleprompter preferences directly', async () => {
+    const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
+
+    const response = await routes['/settings'].POST(
+      new Request('http://localhost/settings', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          scrollSpeed: 175,
+          summarizeArticles: true,
+          volumeButtonMode: true,
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.profile.scrollSpeed).toBe(175);
+    expect(body.profile.summarizeArticles).toBe(true);
+    expect(body.profile.volumeButtonMode).toBe(true);
   });
 
   function createFakeDeps() {
@@ -394,4 +476,16 @@ function createLoadedScript(input: unknown): ActiveScript {
   }
 
   return createActiveScript();
+}
+
+function createPercentScript(): ActiveScript {
+  return {
+    ...createActiveScript(),
+    chapterList: [
+      {title: 'Intro', startChunkIndex: 0, endChunkIndex: 1},
+      {title: 'Middle', startChunkIndex: 2, endChunkIndex: 3},
+      {title: 'End', startChunkIndex: 4, endChunkIndex: 4},
+    ],
+    chunks: ['chunk 1', 'chunk 2', 'chunk 3', 'chunk 4', 'chunk 5'],
+  };
 }

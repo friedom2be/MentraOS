@@ -34,3 +34,26 @@ export interface TeleprompterProfile {
 }
 
 export type ScriptFamily = 'latin' | 'cjk' | 'rtl';
+
+export type PublicTeleprompterProfile = Omit<TeleprompterProfile, 'tokenHash'>;
+
+export interface ScriptProgress {
+  percentage: number;
+  globalChunkIndex: number;
+  totalChunks: number;
+  totalChapters: number;
+}
+
+export interface PreviewState extends ScriptProgress {
+  chapterIndex: number;
+  chunkIndex: number;
+  currentChunk: string | null;
+  currentChapterTitle: string | null;
+  percentageComplete: number;
+}
+
+export interface AppStateResponse {
+  profile: PublicTeleprompterProfile;
+  activeScript: ActiveScript | null;
+  preview: PreviewState | null;
+}

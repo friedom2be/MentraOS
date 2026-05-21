@@ -2,9 +2,31 @@ import type {TeleprompterProfile} from '../domain/types';
 import {normalizeVoiceCommand as normalizeRuntimeVoiceCommand} from '../domain/voice-commands';
 import type {LoadScriptInput} from '../ingestion/load-script';
 
-const CONTROL_ACTIONS = ['pause', 'resume', 'restart', 'repeat', 'next_chapter', 'faster', 'slower', 'save', 'finished'] as const;
+const CONTROL_ACTIONS = [
+  'pause',
+  'resume',
+  'restart',
+  'repeat',
+  'next_chapter',
+  'faster',
+  'slower',
+  'save',
+  'finished',
+  'jump_to_percent',
+] as const;
 
 export type ControlAction = (typeof CONTROL_ACTIONS)[number];
+export type SettingsField =
+  | 'scrollSpeed'
+  | 'summarizeArticles'
+  | 'summarizeEpubs'
+  | 'summarizePdfs'
+  | 'volumeButtonMode';
+
+export interface ControlRequest {
+  action: ControlAction;
+  percentage?: number;
+}
 
 export interface ResetRequest {
   confirmReset: boolean;
@@ -16,6 +38,14 @@ export interface VerifyRequest {
 
 export interface VoiceCommandRequest {
   command: string;
+}
+
+export interface SettingsRequest {
+  scrollSpeed?: number;
+  summarizeArticles?: boolean;
+  summarizeEpubs?: boolean;
+  summarizePdfs?: boolean;
+  volumeButtonMode?: boolean;
 }
 
 export async function parseJsonBody<T>(req: Request): Promise<T> {
@@ -42,9 +72,20 @@ export function parseResetRequest(input: unknown): ResetRequest {
   return {confirmReset: true};
 }
 
-export function parseControlRequest(input: unknown): {action: ControlAction} {
+export function parseControlRequest(input: unknown): ControlRequest {
   if (!isObject(input) || typeof input.action !== 'string' || !isControlAction(input.action)) {
     throw Response.json({error: 'Unsupported control action'}, {status: 400});
+  }
+
+  if (input.action === 'jump_to_percent') {
+    if (typeof input.percentage !== 'number' || Number.isNaN(input.percentage)) {
+      throw Response.json({error: 'percentage is required'}, {status: 400});
+    }
+
+    return {
+      action: input.action,
+      percentage: input.percentage,
+    };
   }
 
   return {action: input.action};
@@ -61,6 +102,37 @@ export function parseVoiceCommandRequest(input: unknown): VoiceCommandRequest {
 export function normalizeVoiceCommand(command: string): ControlAction | null {
   const normalized = normalizeRuntimeVoiceCommand(command);
   return normalized && isControlAction(normalized) ? normalized : null;
+}
+
+export function parseSettingsRequest(input: unknown): SettingsRequest {
+  if (!isObject(input)) {
+    throw Response.json({error: 'Settings payload must be an object'}, {status: 400});
+  }
+
+  const entries = Object.entries(input).filter((entry): entry is [SettingsField, unknown] => isSettingsField(entry[0]));
+  if (entries.length === 0) {
+    throw Response.json({error: 'At least one settings field is required'}, {status: 400});
+  }
+
+  const settings: SettingsRequest = {};
+  for (const [key, value] of entries) {
+    if (key === 'scrollSpeed') {
+      if (typeof value !== 'number' || Number.isNaN(value)) {
+        throw Response.json({error: 'scrollSpeed must be a number'}, {status: 400});
+      }
+
+      settings.scrollSpeed = Math.min(220, Math.max(60, Math.round(value)));
+      continue;
+    }
+
+    if (typeof value !== 'boolean') {
+      throw Response.json({error: `${key} must be a boolean`}, {status: 400});
+    }
+
+    settings[key] = value;
+  }
+
+  return settings;
 }
 
 export function parseLoadRequest(input: unknown, profile: TeleprompterProfile): LoadScriptInput {
@@ -144,6 +216,10 @@ function getDefaultSummarize(sourceType: string, profile: TeleprompterProfile): 
 
 function isControlAction(action: string): action is ControlAction {
   return CONTROL_ACTIONS.includes(action as ControlAction);
+}
+
+function isSettingsField(value: string): value is SettingsField {
+  return ['scrollSpeed', 'summarizeArticles', 'summarizeEpubs', 'summarizePdfs', 'volumeButtonMode'].includes(value);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

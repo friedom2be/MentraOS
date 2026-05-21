@@ -92,3 +92,41 @@ export function chapterIndexForChunk(chunkIndex: number, chapterStarts: number[]
 
   return index;
 }
+
+export function clampPercentage(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, value));
+}
+
+export function chunkIndexForPercentage(percentage: number, chunkCount: number): number {
+  if (chunkCount <= 1) {
+    return 0;
+  }
+
+  const normalized = clampPercentage(percentage);
+  return Math.round((normalized / 100) * (chunkCount - 1));
+}
+
+export function percentageForChunkIndex(chunkIndex: number, chunkCount: number): number {
+  if (chunkCount <= 1) {
+    return 0;
+  }
+
+  const safeIndex = Math.min(Math.max(chunkIndex, 0), chunkCount - 1);
+  return Math.round((safeIndex / (chunkCount - 1)) * 100);
+}
+
+export function chunkPositionForPercentage(
+  percentage: number,
+  chunkCount: number,
+  chapterStarts: number[],
+): Pick<PlaybackState, 'chapterIndex' | 'chunkIndex'> {
+  const chunkIndex = chunkIndexForPercentage(percentage, chunkCount);
+  return {
+    chunkIndex,
+    chapterIndex: chapterIndexForChunk(chunkIndex, chapterStarts),
+  };
+}

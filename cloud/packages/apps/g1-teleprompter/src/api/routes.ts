@@ -1,5 +1,6 @@
 import {createSetupToken, requireBearerToken} from './auth';
 import {
+  parseSettingsRequest,
   normalizeVoiceCommand,
   parseControlRequest,
   parseJsonBody,
@@ -9,7 +10,9 @@ import {
   parseVoiceCommandRequest,
   type ControlAction,
 } from './request-parsing';
-import type {ActiveScript, TeleprompterProfile} from '../domain/types';
+import {chapterIndexForChunk, type RuntimeControlType} from '../domain/playback-controller';
+import {getScriptProgress, mapPercentageToScriptPosition} from '../domain/progress';
+import type {ActiveScript, AppStateResponse, PreviewState, PublicTeleprompterProfile, TeleprompterProfile} from '../domain/types';
 import {UserSession} from '../app/session/UserSession';
 import {loadScript as runLoadScript, type LoadScriptInput} from '../ingestion/load-script';
 import {createDatabase} from '../server/db';
@@ -25,21 +28,6 @@ interface RouteDeps {
   loadScript: (input: LoadScriptInput) => Promise<ActiveScript>;
   now?: () => string;
 }
-
-interface StateResponse {
-  profile: PublicProfile;
-  activeScript: ActiveScript | null;
-  preview: {
-    chapterIndex: number;
-    chunkIndex: number;
-    currentChunk: string | null;
-    currentChapterTitle: string | null;
-    totalChunks: number;
-    totalChapters: number;
-  } | null;
-}
-
-type PublicProfile = Omit<TeleprompterProfile, 'tokenHash'>;
 
 const database = createDatabase(process.env.DATABASE_PATH || './teleprompter.sqlite');
 const profileRepository = new ProfileRepository(database);
@@ -104,8 +92,8 @@ export function createRoutes(deps: RouteDeps) {
         await handleRoute(async () => {
           const profile = deps.profileRepository.getProfile();
           await requireBearerToken(req, profile.tokenHash);
-          const {action} = parseControlRequest(await parseJsonBody(req));
-          return Response.json(await applyControl(action, deps));
+          const {action, percentage} = parseControlRequest(await parseJsonBody(req));
+          return Response.json(await applyControl(action, deps, percentage));
         }),
     },
     '/voice-command': {
@@ -120,6 +108,16 @@ export function createRoutes(deps: RouteDeps) {
           }
 
           return Response.json(await applyControl(action, deps));
+        }),
+    },
+    '/settings': {
+      POST: async (req: Request) =>
+        await handleRoute(async () => {
+          const profile = deps.profileRepository.getProfile();
+          await requireBearerToken(req, profile.tokenHash);
+          const settings = parseSettingsRequest(await parseJsonBody(req));
+          const savedProfile = deps.profileRepository.saveProfile(settings);
+          return Response.json(buildStateResponse(savedProfile, deps.scriptRepository.getActiveScript()));
         }),
     },
   };
@@ -148,7 +146,7 @@ async function initSetup(deps: RouteDeps): Promise<{token: string; shortcutUrl: 
   };
 }
 
-async function verifySetup(token: string, deps: RouteDeps): Promise<{ok: true; profile: PublicProfile}> {
+async function verifySetup(token: string, deps: RouteDeps): Promise<{ok: true; profile: PublicTeleprompterProfile}> {
   const profile = deps.profileRepository.getProfile();
   const request = new Request('http://localhost/setup/verify', {
     headers: {authorization: `Bearer ${token}`},
@@ -164,7 +162,7 @@ async function verifySetup(token: string, deps: RouteDeps): Promise<{ok: true; p
   return {ok: true, profile: toPublicProfile(savedProfile)};
 }
 
-async function resetSetup(deps: RouteDeps): Promise<{token: string; shortcutUrl: string; profile: PublicProfile}> {
+async function resetSetup(deps: RouteDeps): Promise<{token: string; shortcutUrl: string; profile: PublicTeleprompterProfile}> {
   const {plainToken, tokenHash} = await createSetupToken();
   const profile = deps.profileRepository.saveProfile({
     setupComplete: false,
@@ -180,14 +178,15 @@ async function resetSetup(deps: RouteDeps): Promise<{token: string; shortcutUrl:
   };
 }
 
-function getState(deps: RouteDeps): StateResponse {
+function getState(deps: RouteDeps): AppStateResponse {
   const profile = deps.profileRepository.getProfile();
   const activeScript = deps.scriptRepository.getActiveScript();
   return buildStateResponse(profile, activeScript);
 }
 
-async function applyControl(action: ControlAction, deps: RouteDeps): Promise<StateResponse> {
-  const runtimeApplied = await UserSession.applyControlToAll(action);
+async function applyControl(action: ControlAction, deps: RouteDeps, percentage?: number): Promise<AppStateResponse> {
+  const runtimeAction = toRuntimeControlAction(action);
+  const runtimeApplied = runtimeAction ? await UserSession.applyControlToAll(runtimeAction) : false;
   if (runtimeApplied) {
     return getState(deps);
   }
@@ -228,6 +227,13 @@ async function applyControl(action: ControlAction, deps: RouteDeps): Promise<Sta
       deps.scriptRepository.clearActiveScript();
       nextScript = null;
       break;
+    case 'jump_to_percent':
+      nextScript = updateScript(
+        nextScript,
+        (script) => mapPercentageToScriptPosition(percentage ?? 0, script),
+        deps,
+      );
+      break;
     case 'pause':
     case 'resume':
     case 'save':
@@ -255,27 +261,15 @@ function updateScript(
   return next;
 }
 
-function buildStateResponse(profile: TeleprompterProfile, activeScript: ActiveScript | null): StateResponse {
-  const currentChunk = activeScript?.chunks[activeScript.chunkIndex] ?? null;
-  const currentChapter = activeScript?.chapterList[activeScript.chapterIndex] ?? null;
-
+function buildStateResponse(profile: TeleprompterProfile, activeScript: ActiveScript | null): AppStateResponse {
   return {
     profile: toPublicProfile(profile),
     activeScript,
-    preview: activeScript
-      ? {
-          chapterIndex: activeScript.chapterIndex,
-          chunkIndex: activeScript.chunkIndex,
-          currentChunk,
-          currentChapterTitle: currentChapter?.title ?? null,
-          totalChunks: activeScript.chunks.length,
-          totalChapters: activeScript.chapterList.length,
-        }
-      : null,
+    preview: buildPreviewState(activeScript),
   };
 }
 
-function toPublicProfile(profile: TeleprompterProfile): PublicProfile {
+function toPublicProfile(profile: TeleprompterProfile): PublicTeleprompterProfile {
   const {tokenHash: _tokenHash, ...publicProfile} = profile;
   return publicProfile;
 }
@@ -284,6 +278,43 @@ function createShortcutUrl(token: string): string {
   const shortcutName = encodeURIComponent('Mentra Teleprompter Setup');
   const encodedToken = encodeURIComponent(token);
   return `shortcuts://run-shortcut?name=${shortcutName}&input=text&text=${encodedToken}`;
+}
+
+function buildPreviewState(activeScript: ActiveScript | null): PreviewState | null {
+  if (!activeScript) {
+    return null;
+  }
+
+  const progress = getScriptProgress(activeScript);
+  const chapterIndex =
+    activeScript.chapterList[activeScript.chapterIndex] !== undefined
+      ? activeScript.chapterIndex
+      : chapterIndexForChunk(
+          progress.globalChunkIndex,
+          activeScript.chapterList.map((chapter) => chapter.startChunkIndex),
+        );
+  const currentChunk = activeScript.chunks[progress.globalChunkIndex] ?? null;
+  const currentChapter = activeScript.chapterList[chapterIndex] ?? null;
+
+  return {
+    chapterIndex,
+    chunkIndex: progress.globalChunkIndex,
+    globalChunkIndex: progress.globalChunkIndex,
+    currentChunk,
+    currentChapterTitle: currentChapter?.title ?? null,
+    totalChunks: progress.totalChunks,
+    totalChapters: progress.totalChapters,
+    percentage: progress.percentage,
+    percentageComplete: progress.percentage,
+  };
+}
+
+function toRuntimeControlAction(action: ControlAction): RuntimeControlType | null {
+  if (action === 'jump_to_percent') {
+    return null;
+  }
+
+  return action;
 }
 
 function getNow(deps: RouteDeps): string {
