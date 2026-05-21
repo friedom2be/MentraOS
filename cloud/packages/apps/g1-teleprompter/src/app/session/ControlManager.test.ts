@@ -59,6 +59,44 @@ describe('ControlManager', () => {
     expect(state.playback?.chunkIndex).toBe(0);
     expect(timers.pendingCount()).toBe(0);
   });
+
+  test('repeated manual stepping replaces any previously queued auto-resume', async () => {
+    const timers = installFakeTimers();
+    const state = createFakeState({
+      playback: {
+        chapterIndex: 0,
+        chunkIndex: 0,
+        scrollSpeed: 120,
+        status: 'playing',
+      },
+      activeScript: createScript({
+        chunks: ['one two three', 'four five six', 'seven eight nine'],
+        chapterList: [{title: 'Full Script', startChunkIndex: 0, endChunkIndex: 2}],
+      }),
+    });
+    const display = {
+      clear() {},
+      showActiveScript() {},
+    };
+
+    const control = new ControlManager(state as never, display as never, createLogger() as never);
+
+    await control.apply('advance_chunk');
+    expect(state.playback?.status).toBe('paused');
+    expect(state.playback?.chunkIndex).toBe(1);
+    expect(timers.pendingCount()).toBe(1);
+
+    await control.apply('advance_chunk');
+    expect(state.playback?.status).toBe('paused');
+    expect(state.playback?.chunkIndex).toBe(2);
+    expect(timers.pendingCount()).toBe(0);
+
+    timers.runPending();
+
+    expect(state.playback?.status).toBe('paused');
+    expect(state.playback?.chunkIndex).toBe(2);
+    expect(timers.pendingCount()).toBe(0);
+  });
 });
 
 function createFakeState({

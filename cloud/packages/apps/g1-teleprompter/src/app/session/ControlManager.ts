@@ -69,6 +69,8 @@ export class ControlManager {
   }
 
   private async advanceChunk(pauseForInteraction: boolean): Promise<boolean> {
+    this.clearTimers();
+
     const playback = this.stateSync.getPlayback();
     const activeScript = this.stateSync.getActiveScript();
     if (!playback || !activeScript) {
@@ -110,6 +112,8 @@ export class ControlManager {
   }
 
   private async rewindChunk(): Promise<boolean> {
+    this.clearTimers();
+
     const playback = this.stateSync.getPlayback();
     const activeScript = this.stateSync.getActiveScript();
     if (!playback || !activeScript) {
