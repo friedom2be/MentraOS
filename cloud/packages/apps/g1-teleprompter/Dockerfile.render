@@ -1,12 +1,14 @@
 FROM oven/bun:1.2.15
 
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app/cloud
 
 COPY cloud/package.json ./
 COPY cloud/tsconfig*.json ./
 COPY cloud/packages ./packages
 
-RUN bun install
+RUN bun install --no-link --ignore-scripts
 RUN bun run build
 RUN bun run --cwd packages/apps/g1-teleprompter build:webview
 
