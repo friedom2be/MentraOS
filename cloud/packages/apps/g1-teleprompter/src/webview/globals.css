@@ -23,6 +23,8 @@ html,
 body,
 #root {
   min-height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -59,9 +61,11 @@ textarea {
 
 .app-shell__frame {
   width: min(1200px, 100%);
+  max-width: 100%;
   margin: 0 auto;
   position: relative;
   z-index: 1;
+  overflow-x: hidden;
 }
 
 .dashboard-shell,
@@ -136,6 +140,7 @@ h2 {
   margin: 0;
   font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
   letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
 }
 
 h1 {
@@ -320,6 +325,8 @@ h2 {
   padding: 13px 18px;
   cursor: pointer;
   font-weight: 600;
+  max-width: 100%;
+  white-space: normal;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   transition:
@@ -440,6 +447,14 @@ h2 {
   .preview-meta {
     grid-template-columns: 1fr;
   }
+
+  .button-row--primary-step,
+  .tab-row,
+  .percentage-jump,
+  .button-grid,
+  .stack--inline {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -460,7 +475,8 @@ h2 {
   .tab-row,
   .percentage-jump,
   .button-grid,
-  .stack--inline {
+  .stack--inline,
+  .button-row--primary-step {
     display: grid;
     grid-template-columns: 1fr;
   }
@@ -474,5 +490,14 @@ h2 {
 
   .toggle {
     align-items: flex-start;
+  }
+
+  h1 {
+    font-size: clamp(1.8rem, 8vw, 2.6rem);
+  }
+
+  .teleprompter-preview {
+    min-height: 180px;
+    padding: 18px;
   }
 }

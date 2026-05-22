@@ -222,6 +222,11 @@ Mitigation applied:
 - Allowed long preview text to wrap safely
 - Stacked headers and metrics earlier on narrower screens
 - Converted tab/action/settings rows into full-width single-column mobile blocks at phone widths
+- Added a stronger follow-up pass to:
+  - hide horizontal overflow at `html/body/#root` and frame level
+  - force long titles and button labels to wrap
+  - collapse primary step buttons and action rows earlier
+  - reduce hero/title sizing and preview height further on very small screens
 
 Files changed:
 - `cloud/packages/apps/g1-teleprompter/src/webview/globals.css`
