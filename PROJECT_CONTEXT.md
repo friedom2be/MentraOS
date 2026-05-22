@@ -183,6 +183,29 @@ Important remaining caveat:
 - Render free still only provides 512MB, so very large ebooks may remain risky even after the lighter extractor change
 - If hosted ebook ingestion must be reliable for bigger books, stronger hosting is still the safest long-term path
 
+### 5. Flashing buttons in phone/glasses webview
+
+Observed:
+- With an EPUB loaded and chunk stepping working, several buttons in the in-app UI appeared to flash
+
+Likely root cause:
+- The dashboard polls `/state` every 3 seconds
+- The frontend was replacing the whole `appState` object even when nothing meaningful changed
+- Touch webviews were also getting desktop-style hover/transform button effects, which can flicker on repeated repaint
+
+Mitigation applied:
+- Skip `appState` replacement when the polled state is unchanged
+- Restrict hover-only button transforms to pointer/fine hover environments
+- Disable tap highlight on buttons for touch webviews
+
+Files changed:
+- `cloud/packages/apps/g1-teleprompter/src/webview/hooks/useAppState.ts`
+- `cloud/packages/apps/g1-teleprompter/src/webview/globals.css`
+
+Verification completed locally:
+- `bun x tsc --noEmit`
+- `bun test src/webview/components/Dashboard.test.tsx src/webview/components/SettingsPanel.test.tsx src/webview/components/settings-sync.test.ts src/webview/html.test.ts`
+
 ## Current Hosted Status
 
 As of the latest meaningful session:
@@ -192,6 +215,7 @@ As of the latest meaningful session:
 - A follow-up EPUB memory reduction change has been prepared locally after a Render free-tier OOM report and should be deployed before the next ebook retry
 - Commit `401b4d825` is live on Render and includes the lighter EPUB extractor
 - Another follow-up memory reduction is prepared to remove extra byte copies during base64 decode and EPUB/PDF handoff before the next hosted ebook retry
+- A follow-up UI stability fix is prepared to reduce flashing controls in the phone/glasses webview during background polling
 
 Important note:
 - If MentraOS still shows a white screen, first verify whether Render has finished deploying commit `590a69f89`

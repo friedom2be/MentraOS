@@ -56,7 +56,7 @@ export function useAppState() {
       try {
         const nextState = await requestJson<AppStateResponse>('/state', {auth: true}, token);
         if (!canceled) {
-          setAppState(nextState);
+          setAppState((currentState) => (sameAppState(currentState, nextState) ? currentState : nextState));
           setError(null);
         }
       } catch (nextError) {
@@ -92,7 +92,7 @@ export function useAppState() {
       try {
         const nextState = await requestJson<AppStateResponse>('/state', {auth: true}, token);
         if (!canceled) {
-          setAppState(nextState);
+          setAppState((currentState) => (sameAppState(currentState, nextState) ? currentState : nextState));
           setError(null);
           setInitialStateResolved(true);
         }
@@ -237,6 +237,18 @@ export function useAppState() {
     updateSettings,
     verifySetup,
   };
+}
+
+function sameAppState(currentState: AppStateResponse | null, nextState: AppStateResponse | null): boolean {
+  if (currentState === nextState) {
+    return true;
+  }
+
+  if (!currentState || !nextState) {
+    return false;
+  }
+
+  return JSON.stringify(currentState) === JSON.stringify(nextState);
 }
 
 async function requestJson<T = unknown>(path: string, options: RequestOptions, token?: string | null): Promise<T> {
