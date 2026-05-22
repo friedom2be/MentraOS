@@ -32,6 +32,7 @@ body {
     radial-gradient(circle at top right, rgba(79, 145, 128, 0.18), transparent 24%),
     linear-gradient(180deg, #060c0e 0%, #0d1517 42%, #16211f 100%);
   color: var(--ink);
+  overflow-x: hidden;
 }
 
 button,
@@ -44,6 +45,7 @@ textarea {
   min-height: 100vh;
   padding: 32px 18px 56px;
   position: relative;
+  overflow-x: clip;
 }
 
 .app-shell__backdrop {
@@ -66,12 +68,14 @@ textarea {
 .setup-shell {
   display: grid;
   gap: 20px;
+  min-width: 0;
 }
 
 .dashboard-grid,
 .setup-grid {
   display: grid;
   gap: 20px;
+  min-width: 0;
 }
 
 .dashboard-grid {
@@ -86,6 +90,7 @@ textarea {
 .dashboard-side {
   display: grid;
   gap: 20px;
+  min-width: 0;
 }
 
 .panel {
@@ -95,6 +100,7 @@ textarea {
   padding: 24px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
+  min-width: 0;
 }
 
 .panel--hero {
@@ -178,6 +184,7 @@ h2 {
   border-radius: 20px;
   padding: 14px 16px;
   background: rgba(255, 255, 255, 0.05);
+  min-width: 0;
 }
 
 .hero-metric span,
@@ -231,6 +238,7 @@ h2 {
   font-size: clamp(1.15rem, 2.1vw, 1.8rem);
   line-height: 1.5;
   color: #f8ffd7;
+  overflow-wrap: anywhere;
 }
 
 .percentage-jump,
@@ -265,6 +273,7 @@ h2 {
 .field {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .field__label {
@@ -283,6 +292,7 @@ h2 {
   padding: 15px 16px;
   outline: none;
   font-size: 1rem;
+  min-width: 0;
 }
 
 .input:focus,
@@ -376,6 +386,7 @@ h2 {
   border-radius: 18px;
   padding: 12px 14px;
   background: rgba(255, 255, 255, 0.02);
+  min-width: 0;
 }
 
 .toggle input {
@@ -419,6 +430,16 @@ h2 {
   .setup-grid {
     grid-template-columns: 1fr;
   }
+
+  .panel__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-metrics,
+  .preview-meta {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -434,5 +455,24 @@ h2 {
   .hero-metrics,
   .preview-meta {
     grid-template-columns: 1fr;
+  }
+
+  .tab-row,
+  .percentage-jump,
+  .button-grid,
+  .stack--inline {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .tab-row > *,
+  .percentage-jump > *,
+  .button-grid > *,
+  .stack--inline > * {
+    width: 100%;
+  }
+
+  .toggle {
+    align-items: flex-start;
   }
 }

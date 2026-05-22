@@ -206,6 +206,30 @@ Verification completed locally:
 - `bun x tsc --noEmit`
 - `bun test src/webview/components/Dashboard.test.tsx src/webview/components/SettingsPanel.test.tsx src/webview/components/settings-sync.test.ts src/webview/html.test.ts`
 
+### 6. Phone window layout overflow
+
+Observed:
+- The app no longer fit within the iPhone MentraOS window cleanly
+- User had to scroll around to see controls, making the app difficult to navigate
+
+Likely root cause:
+- Desktop-oriented multi-column sections and flex rows were still staying wide too long
+- Some panels and text blocks could force horizontal overflow in the smaller in-app phone window
+
+Mitigation applied:
+- Disabled horizontal overflow at the page level
+- Added `min-width: 0` protections across major grid/panel/form containers
+- Allowed long preview text to wrap safely
+- Stacked headers and metrics earlier on narrower screens
+- Converted tab/action/settings rows into full-width single-column mobile blocks at phone widths
+
+Files changed:
+- `cloud/packages/apps/g1-teleprompter/src/webview/globals.css`
+
+Verification completed locally:
+- `bun x tsc --noEmit`
+- `bun test src/webview/components/Dashboard.test.tsx src/webview/components/SettingsPanel.test.tsx src/webview/components/settings-sync.test.ts src/webview/html.test.ts`
+
 ## Current Hosted Status
 
 As of the latest meaningful session:
@@ -216,6 +240,7 @@ As of the latest meaningful session:
 - Commit `401b4d825` is live on Render and includes the lighter EPUB extractor
 - Another follow-up memory reduction is prepared to remove extra byte copies during base64 decode and EPUB/PDF handoff before the next hosted ebook retry
 - A follow-up UI stability fix is prepared to reduce flashing controls in the phone/glasses webview during background polling
+- A follow-up responsive layout fix is prepared to keep the dashboard inside the iPhone MentraOS window without awkward horizontal wandering
 
 Important note:
 - If MentraOS still shows a white screen, first verify whether Render has finished deploying commit `590a69f89`
