@@ -203,7 +203,8 @@ function decodeBase64File(input: Record<string, unknown>): Uint8Array {
     throw Response.json({error: 'Invalid base64Data'}, {status: 400});
   }
 
-  return Uint8Array.from(Buffer.from(normalized, 'base64'));
+  const buffer = Buffer.from(normalized, 'base64');
+  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 }
 
 function getDefaultSummarize(sourceType: string, profile: TeleprompterProfile): boolean {

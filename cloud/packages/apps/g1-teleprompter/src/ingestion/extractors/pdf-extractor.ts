@@ -4,7 +4,8 @@ export async function extractFromPdf(
   bytes: ArrayBuffer | Uint8Array,
   title = 'Imported PDF',
 ): Promise<{title: string; text: string}> {
-  const buffer = bytes instanceof Uint8Array ? Buffer.from(bytes) : Buffer.from(bytes);
+  const byteView = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const buffer = Buffer.isBuffer(byteView) ? byteView : Buffer.from(byteView);
   const parsed = await pdf(buffer);
   const text = parsed.text.trim();
 

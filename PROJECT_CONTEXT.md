@@ -167,13 +167,17 @@ Mitigation applied:
 - Removed `JSDOM` from the EPUB extractor
 - Replaced it with lightweight tag/title extraction using string processing
 - Preserved current extractor behavior in tests
+- Removed extra file-byte copies in the upload/decode path so EPUB/PDF ingestion does not duplicate buffers unnecessarily before parsing
 
 Files changed:
 - `cloud/packages/apps/g1-teleprompter/src/ingestion/extractors/epub-extractor.ts`
+- `cloud/packages/apps/g1-teleprompter/src/api/request-parsing.ts`
+- `cloud/packages/apps/g1-teleprompter/src/ingestion/extractors/pdf-extractor.ts`
 
 Verification completed locally:
 - `bun test src/ingestion/extractors/epub-extractor.test.ts src/ingestion/load-script.test.ts`
 - `bun x tsc --noEmit`
+- `bun test src/ingestion/extractors/epub-extractor.test.ts src/ingestion/load-script.test.ts src/api/routes.test.ts`
 
 Important remaining caveat:
 - Render free still only provides 512MB, so very large ebooks may remain risky even after the lighter extractor change
@@ -186,6 +190,8 @@ As of the latest meaningful session:
 - Commit `c65e31d39` is confirmed live on Render
 - Commit `590a69f89` was auto-deploying to fix the white-screen asset routing issue
 - A follow-up EPUB memory reduction change has been prepared locally after a Render free-tier OOM report and should be deployed before the next ebook retry
+- Commit `401b4d825` is live on Render and includes the lighter EPUB extractor
+- Another follow-up memory reduction is prepared to remove extra byte copies during base64 decode and EPUB/PDF handoff before the next hosted ebook retry
 
 Important note:
 - If MentraOS still shows a white screen, first verify whether Render has finished deploying commit `590a69f89`

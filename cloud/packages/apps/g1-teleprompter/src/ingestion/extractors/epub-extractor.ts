@@ -12,7 +12,8 @@ export async function extractFromEpub(
   bytes: ArrayBuffer | Uint8Array,
   fallbackTitle = 'Imported EPUB',
 ): Promise<{title: string; text: string; chapters: DetectedChapter[]}> {
-  const zip = new AdmZip(Buffer.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)));
+  const archiveBytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const zip = new AdmZip(Buffer.isBuffer(archiveBytes) ? archiveBytes : Buffer.from(archiveBytes));
   const containerXml = zip.readAsText('META-INF/container.xml');
 
   if (!containerXml) {
