@@ -1,0 +1,19 @@
+FROM oven/bun:1.2.15
+
+WORKDIR /app/cloud
+
+COPY cloud/package.json ./
+COPY cloud/tsconfig*.json ./
+COPY cloud/packages ./packages
+
+RUN bun install
+RUN bun run build
+RUN bun run --cwd packages/apps/g1-teleprompter build:webview
+
+WORKDIR /app/cloud/packages/apps/g1-teleprompter
+
+ENV NODE_ENV=production
+
+EXPOSE 10000
+
+CMD ["bun", "src/index.ts"]
