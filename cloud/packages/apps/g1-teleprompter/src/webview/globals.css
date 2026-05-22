@@ -236,6 +236,8 @@ h2 {
   padding: 24px;
   display: grid;
   align-items: center;
+  gap: 14px;
+  touch-action: pan-y;
 }
 
 .teleprompter-preview p {
@@ -244,6 +246,12 @@ h2 {
   line-height: 1.5;
   color: #f8ffd7;
   overflow-wrap: anywhere;
+}
+
+.teleprompter-preview__hint {
+  color: rgba(247, 248, 239, 0.62);
+  font-size: 0.88rem;
+  line-height: 1.4;
 }
 
 .percentage-jump,
