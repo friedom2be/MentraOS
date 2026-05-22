@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react';
 
+import {TELEPROMPTER_TOKEN_HEADER} from '../../api/auth';
 import type {ControlAction, SettingsRequest} from '../../api/request-parsing';
 import type {AppStateResponse} from '../../domain/types';
 
@@ -46,9 +47,38 @@ export function useAppState() {
   const [appState, setAppState] = useState<AppStateResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialStateResolved, setInitialStateResolved] = useState(false);
 
   useEffect(() => {
-    if (!token) {
+    let canceled = false;
+
+    const bootstrapState = async () => {
+      try {
+        const nextState = await requestJson<AppStateResponse>('/state', {auth: true}, token);
+        if (!canceled) {
+          setAppState(nextState);
+          setError(null);
+        }
+      } catch (nextError) {
+        if (!canceled) {
+          setError(toMessage(nextError));
+        }
+      } finally {
+        if (!canceled) {
+          setInitialStateResolved(true);
+        }
+      }
+    };
+
+    void bootstrapState();
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!token && !appState?.profile.setupComplete) {
       return;
     }
 
@@ -64,10 +94,12 @@ export function useAppState() {
         if (!canceled) {
           setAppState(nextState);
           setError(null);
+          setInitialStateResolved(true);
         }
       } catch (nextError) {
         if (!canceled) {
           setError(toMessage(nextError));
+          setInitialStateResolved(true);
         }
       }
     };
@@ -140,14 +172,10 @@ export function useAppState() {
   }
 
   async function refreshState() {
-    if (!token) {
-      setError('Enter your setup token to load state.');
-      return;
-    }
-
     await runWithBusy(async () => {
       const nextState = await requestJson<AppStateResponse>('/state', {auth: true}, token);
       setAppState(nextState);
+      setInitialStateResolved(true);
     });
   }
 
@@ -198,6 +226,7 @@ export function useAppState() {
     busy,
     error,
     generatedToken,
+    initialStateResolved,
     shortcutUrl,
     token,
     initializeSetup,
@@ -218,11 +247,9 @@ async function requestJson<T = unknown>(path: string, options: RequestOptions, t
   }
 
   if (options.auth !== false) {
-    if (!token) {
-      throw new Error('A setup token is required for this action.');
+    if (token) {
+      headers.set(TELEPROMPTER_TOKEN_HEADER, token);
     }
-
-    headers.set('authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(path, {

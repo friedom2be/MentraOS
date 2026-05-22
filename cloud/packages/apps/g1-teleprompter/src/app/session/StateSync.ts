@@ -65,6 +65,15 @@ export class StateSync {
       };
     }
 
+    console.info('[g1-teleprompter] syncFromPersistence', {
+      profileChanged,
+      scriptChanged,
+      scrollSpeed: nextProfile.scrollSpeed,
+      chapterIndex: nextScript?.chapterIndex,
+      chunkIndex: nextScript?.chunkIndex,
+      status: this.playback?.status,
+    });
+
     return {
       changed: profileChanged || scriptChanged,
       profileChanged,

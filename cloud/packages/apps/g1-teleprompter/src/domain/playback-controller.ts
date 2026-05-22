@@ -1,3 +1,5 @@
+import {MAX_SCROLL_SPEED, MIN_SCROLL_SPEED} from '../api/request-parsing';
+
 export type PlaybackStatus = 'paused' | 'playing';
 
 export interface PlaybackState {
@@ -68,9 +70,9 @@ export function applyControlAction(state: PlaybackState, action: PlaybackAction)
       };
     }
     case 'faster':
-      return {...state, scrollSpeed: Math.min(state.scrollSpeed + 10, 220)};
+      return {...state, scrollSpeed: Math.min(state.scrollSpeed + 10, MAX_SCROLL_SPEED)};
     case 'slower':
-      return {...state, scrollSpeed: Math.max(state.scrollSpeed - 10, 60)};
+      return {...state, scrollSpeed: Math.max(state.scrollSpeed - 10, MIN_SCROLL_SPEED)};
     case 'save':
     case 'finished':
       return {...state};

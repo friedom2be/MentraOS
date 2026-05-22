@@ -7,8 +7,10 @@ interface PreviewCardProps {
   onChangePercentage: (value: string) => void;
   onJumpToPercentage: () => Promise<void>;
   onPause: () => Promise<void>;
+  onPreviousChunk: () => Promise<void>;
   onResume: () => Promise<void>;
   onRestart: () => Promise<void>;
+  onNextChunk: () => Promise<void>;
   onNextChapter: () => Promise<void>;
   onRepeat: () => Promise<void>;
   onFinish: () => Promise<void>;
@@ -21,8 +23,10 @@ export function PreviewCard({
   onChangePercentage,
   onFinish,
   onJumpToPercentage,
+  onNextChunk,
   onNextChapter,
   onPause,
+  onPreviousChunk,
   onRepeat,
   onRestart,
   onResume,
@@ -90,6 +94,15 @@ export function PreviewCard({
         </label>
         <button className="button button--ghost" disabled={busy || !preview} onClick={() => void onJumpToPercentage()}>
           Set position
+        </button>
+      </div>
+
+      <div className="button-row button-row--primary-step">
+        <button className="button button--primary-step" disabled={busy || !preview} onClick={() => void onPreviousChunk()}>
+          Previous
+        </button>
+        <button className="button button--primary-step" disabled={busy || !preview} onClick={() => void onNextChunk()}>
+          Next
         </button>
       </div>
 

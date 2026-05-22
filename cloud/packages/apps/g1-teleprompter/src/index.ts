@@ -4,18 +4,26 @@ import {routes} from './api/routes';
 import {G1TeleprompterApp} from './app';
 import {createProxyHandler, getStartupConfig, shouldStartAppServer} from './startup';
 import indexDev from './webview/index.html';
-import indexProd from './webview/index.prod.html';
+import {getProdHtml} from './webview/html';
 
 const config = getStartupConfig(process.env);
 const sigintListeners = new Set(process.listeners('SIGINT'));
 const sigtermListeners = new Set(process.listeners('SIGTERM'));
+const prodHtml = config.isDevelopment ? null : await getProdHtml();
 
 const bunServer = serve({
   port: config.bunPort,
   development: config.isDevelopment ? {hmr: true} : false,
   routes: {
     ...routes,
-    '/*': config.isDevelopment ? indexDev : indexProd,
+    '/*':
+      config.isDevelopment
+        ? indexDev
+        : new Response(prodHtml, {
+            headers: {
+              'content-type': 'text/html; charset=utf-8',
+            },
+          }),
   },
 });
 

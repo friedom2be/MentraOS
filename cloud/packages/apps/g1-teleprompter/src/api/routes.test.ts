@@ -126,6 +126,43 @@ describe('routes', () => {
     expect(response.status).toBe(401);
   });
 
+  test('GET /state accepts the teleprompter token header', async () => {
+    activeScript = createActiveScript();
+    const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
+
+    const response = await routes['/state'].GET(
+      new Request('http://localhost/state', {
+        headers: {'x-teleprompter-token': token},
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.profile).toBeDefined();
+    expect(body.activeScript?.sourceTitle).toBe('Draft');
+  });
+
+  test('GET /state accepts a proxied Mentra session header', async () => {
+    activeScript = createActiveScript();
+    const routes = createRoutes(createFakeDeps());
+    await initializeSetup(routes);
+
+    const response = await routes['/state'].GET(
+      new Request('http://localhost/state', {
+        headers: {
+          'x-auth-user-id': 'friedom@icloud.com',
+          'x-has-active-session': 'true',
+        },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.profile).toBeDefined();
+    expect(body.activeScript?.sourceTitle).toBe('Draft');
+  });
+
   test('POST /load rejects malformed base64 uploads cleanly', async () => {
     const routes = createRoutes(createFakeDeps());
     const token = await initializeSetup(routes);
@@ -323,6 +360,46 @@ describe('routes', () => {
     expect(nextChapterBody.preview.percentageComplete).toBe(100);
   });
 
+  test('POST /state/control can manually advance and rewind chunks', async () => {
+    activeScript = createActiveScript();
+    const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
+
+    const advanceResponse = await routes['/state/control'].POST(
+      new Request('http://localhost/state/control', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({action: 'advance_chunk'}),
+      }),
+    );
+    const advanceBody = await advanceResponse.json();
+
+    expect(advanceResponse.status).toBe(200);
+    expect(advanceBody.activeScript.chunkIndex).toBe(1);
+    expect(advanceBody.preview.currentChunk).toBe('chunk 2');
+    expect(advanceBody.preview.percentageComplete).toBe(50);
+
+    const rewindResponse = await routes['/state/control'].POST(
+      new Request('http://localhost/state/control', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({action: 'rewind_chunk'}),
+      }),
+    );
+    const rewindBody = await rewindResponse.json();
+
+    expect(rewindResponse.status).toBe(200);
+    expect(rewindBody.activeScript.chunkIndex).toBe(0);
+    expect(rewindBody.preview.currentChunk).toBe('chunk 1');
+    expect(rewindBody.preview.percentageComplete).toBe(0);
+  });
+
   test('POST /state/control can jump to a target percentage before playback begins', async () => {
     activeScript = createPercentScript();
     const routes = createRoutes(createFakeDeps());
@@ -395,6 +472,28 @@ describe('routes', () => {
     expect(body.profile.scrollSpeed).toBe(175);
     expect(body.profile.summarizeArticles).toBe(true);
     expect(body.profile.volumeButtonMode).toBe(true);
+  });
+
+  test('POST /settings accepts high WPM values for faster teleprompter playback', async () => {
+    const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
+
+    const response = await routes['/settings'].POST(
+      new Request('http://localhost/settings', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          scrollSpeed: 600,
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.profile.scrollSpeed).toBe(600);
   });
 
   function createFakeDeps() {

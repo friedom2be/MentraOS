@@ -157,13 +157,28 @@ export class ControlManager {
     const playback = this.stateSync.getPlayback();
     const activeScript = this.stateSync.getActiveScript();
     if (!playback || !activeScript || playback.status !== 'playing') {
+      console.info('[g1-teleprompter] reconcileTimers skipped', {
+        hasPlayback: Boolean(playback),
+        hasActiveScript: Boolean(activeScript),
+        status: playback?.status,
+      });
       return;
     }
 
     const currentChunk = activeScript.chunks[playback.chunkIndex] ?? '';
     const durationMs = calculateChunkDurationMs(currentChunk, playback.scrollSpeed);
+    console.info('[g1-teleprompter] reconcileTimers scheduled', {
+      scrollSpeed: playback.scrollSpeed,
+      chunkIndex: playback.chunkIndex,
+      chapterIndex: playback.chapterIndex,
+      durationMs,
+      preview: currentChunk.slice(0, 80),
+    });
 
     this.autoAdvanceTimer = setTimeout(() => {
+      console.info('[g1-teleprompter] autoAdvanceTimer fired', {
+        scrollSpeed: this.stateSync.getPlayback()?.scrollSpeed,
+      });
       void this.advanceChunk(false);
     }, durationMs);
   }
@@ -223,6 +238,15 @@ export class ControlManager {
       activeScript && playback && playback.status === 'playing'
         ? calculateChunkDurationMs(currentChunk, playback.scrollSpeed)
         : undefined;
+
+    console.info('[g1-teleprompter] showCurrentScript', {
+      hasActiveScript: Boolean(activeScript),
+      status: playback?.status,
+      scrollSpeed: playback?.scrollSpeed,
+      chunkIndex: playback?.chunkIndex,
+      durationMs,
+      preview: currentChunk.slice(0, 80),
+    });
 
     this.display.showActiveScript(activeScript, durationMs);
   }

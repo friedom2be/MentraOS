@@ -12,7 +12,6 @@ interface DashboardProps {
   error: string | null;
   onLoadScript: (payload: LoadRequestPayload) => Promise<void>;
   onRefreshState: () => Promise<void>;
-  onResetSetup: () => Promise<void>;
   onSendControl: (action: ControlAction, percentage?: number) => Promise<void>;
   onUpdateSettings: (settings: {
     scrollSpeed?: number;
@@ -31,7 +30,6 @@ export function Dashboard({
   error,
   onLoadScript,
   onRefreshState,
-  onResetSetup,
   onSendControl,
   onUpdateSettings,
 }: DashboardProps) {
@@ -146,8 +144,10 @@ export function Dashboard({
             onChangePercentage={setPercentageInput}
             onFinish={async () => await onSendControl('finished')}
             onJumpToPercentage={handleJumpToPercentage}
+            onNextChunk={async () => await onSendControl('advance_chunk')}
             onNextChapter={async () => await onSendControl('next_chapter')}
             onPause={async () => await onSendControl('pause')}
+            onPreviousChunk={async () => await onSendControl('rewind_chunk')}
             onRepeat={async () => await onSendControl('repeat')}
             onRestart={async () => await onSendControl('restart')}
             onResume={handleResume}
@@ -171,6 +171,12 @@ export function Dashboard({
               <TabButton active={sourceMode === 'url'} label="URL" onClick={() => setSourceMode('url')} />
               <TabButton active={sourceMode === 'file'} label="File" onClick={() => setSourceMode('file')} />
             </div>
+
+            {!appState.activeScript ? (
+              <div className="callout">
+                <strong>Welcome to Mentra HUD Reader.</strong> Load a script to start reading on your HUD.
+              </div>
+            ) : null}
 
             <form className="stack" onSubmit={(event) => void handleLoad(event)}>
               {sourceMode === 'text' ? (
@@ -230,7 +236,7 @@ export function Dashboard({
         </div>
 
         <div className="dashboard-side">
-          <SettingsPanel busy={busy} onResetSetup={onResetSetup} onUpdateSettings={onUpdateSettings} profile={appState.profile} />
+          <SettingsPanel busy={busy} onUpdateSettings={onUpdateSettings} profile={appState.profile} />
         </div>
       </div>
 

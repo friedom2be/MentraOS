@@ -2,6 +2,9 @@ import type {TeleprompterProfile} from '../domain/types';
 import {normalizeVoiceCommand as normalizeRuntimeVoiceCommand} from '../domain/voice-commands';
 import type {LoadScriptInput} from '../ingestion/load-script';
 
+export const MIN_SCROLL_SPEED = 60;
+export const MAX_SCROLL_SPEED = 600;
+
 const CONTROL_ACTIONS = [
   'pause',
   'resume',
@@ -13,6 +16,8 @@ const CONTROL_ACTIONS = [
   'save',
   'finished',
   'jump_to_percent',
+  'advance_chunk',
+  'rewind_chunk',
 ] as const;
 
 export type ControlAction = (typeof CONTROL_ACTIONS)[number];
@@ -121,7 +126,7 @@ export function parseSettingsRequest(input: unknown): SettingsRequest {
         throw Response.json({error: 'scrollSpeed must be a number'}, {status: 400});
       }
 
-      settings.scrollSpeed = Math.min(220, Math.max(60, Math.round(value)));
+      settings.scrollSpeed = Math.min(MAX_SCROLL_SPEED, Math.max(MIN_SCROLL_SPEED, Math.round(value)));
       continue;
     }
 

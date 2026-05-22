@@ -1,5 +1,7 @@
 import {createSetupToken, requireBearerToken} from './auth';
 import {
+  MAX_SCROLL_SPEED,
+  MIN_SCROLL_SPEED,
   parseSettingsRequest,
   normalizeVoiceCommand,
   parseControlRequest,
@@ -72,6 +74,7 @@ export function createRoutes(deps: RouteDeps) {
     '/load': {
       POST: async (req: Request) =>
         await handleRoute(async () => {
+          console.info('[g1-teleprompter] /load request received');
           const profile = deps.profileRepository.getProfile();
           await requireBearerToken(req, profile.tokenHash);
           const loadInput = parseLoadRequest(await parseJsonBody(req), profile);
@@ -90,9 +93,11 @@ export function createRoutes(deps: RouteDeps) {
     '/state/control': {
       POST: async (req: Request) =>
         await handleRoute(async () => {
+          console.info('[g1-teleprompter] /state/control request received');
           const profile = deps.profileRepository.getProfile();
           await requireBearerToken(req, profile.tokenHash);
           const {action, percentage} = parseControlRequest(await parseJsonBody(req));
+          console.info('[g1-teleprompter] /state/control parsed', {action, percentage});
           return Response.json(await applyControl(action, deps, percentage));
         }),
     },
@@ -113,10 +118,14 @@ export function createRoutes(deps: RouteDeps) {
     '/settings': {
       POST: async (req: Request) =>
         await handleRoute(async () => {
+          console.info('[g1-teleprompter] /settings request received');
           const profile = deps.profileRepository.getProfile();
           await requireBearerToken(req, profile.tokenHash);
           const settings = parseSettingsRequest(await parseJsonBody(req));
+          console.info('[g1-teleprompter] /settings parsed', settings);
           const savedProfile = deps.profileRepository.saveProfile(settings);
+          UserSession.syncAllFromPersistence();
+          console.info('[g1-teleprompter] /settings saved profile', savedProfile);
           return Response.json(buildStateResponse(savedProfile, deps.scriptRepository.getActiveScript()));
         }),
     },
@@ -198,12 +207,12 @@ async function applyControl(action: ControlAction, deps: RouteDeps, percentage?:
   switch (action) {
     case 'faster':
       nextProfile = deps.profileRepository.saveProfile({
-        scrollSpeed: Math.min(currentProfile.scrollSpeed + 10, 220),
+        scrollSpeed: Math.min(currentProfile.scrollSpeed + 10, MAX_SCROLL_SPEED),
       });
       break;
     case 'slower':
       nextProfile = deps.profileRepository.saveProfile({
-        scrollSpeed: Math.max(currentProfile.scrollSpeed - 10, 60),
+        scrollSpeed: Math.max(currentProfile.scrollSpeed - 10, MIN_SCROLL_SPEED),
       });
       break;
     case 'restart':
@@ -231,6 +240,38 @@ async function applyControl(action: ControlAction, deps: RouteDeps, percentage?:
       nextScript = updateScript(
         nextScript,
         (script) => mapPercentageToScriptPosition(percentage ?? 0, script),
+        deps,
+      );
+      break;
+    case 'advance_chunk':
+      nextScript = updateScript(
+        nextScript,
+        (script) => {
+          const nextChunkIndex = Math.min(script.chunkIndex + 1, Math.max(script.chunks.length - 1, 0));
+          return {
+            chapterIndex: chapterIndexForChunk(
+              nextChunkIndex,
+              script.chapterList.map((chapter) => chapter.startChunkIndex),
+            ),
+            chunkIndex: nextChunkIndex,
+          };
+        },
+        deps,
+      );
+      break;
+    case 'rewind_chunk':
+      nextScript = updateScript(
+        nextScript,
+        (script) => {
+          const nextChunkIndex = Math.max(script.chunkIndex - 1, 0);
+          return {
+            chapterIndex: chapterIndexForChunk(
+              nextChunkIndex,
+              script.chapterList.map((chapter) => chapter.startChunkIndex),
+            ),
+            chunkIndex: nextChunkIndex,
+          };
+        },
         deps,
       );
       break;

@@ -96,6 +96,12 @@ export class UserSession {
     return applied;
   }
 
+  static syncAllFromPersistence(): void {
+    for (const session of UserSession.userSessions.values()) {
+      session.syncFromPersistence();
+    }
+  }
+
   private async handleButtonPress(buttonId: string): Promise<void> {
     if (!this.state.getProfile().volumeButtonMode) {
       return;
