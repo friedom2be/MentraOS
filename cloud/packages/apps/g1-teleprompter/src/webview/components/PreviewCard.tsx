@@ -1,7 +1,4 @@
-import {useRef} from 'react';
-
 import type {PreviewState} from '../../domain/types';
-import {getSwipeDirection, type SwipeSample} from './swipe-navigation';
 
 interface PreviewCardProps {
   busy: boolean;
@@ -36,46 +33,6 @@ export function PreviewCard({
 }: PreviewCardProps) {
   const progressWidth = `${preview?.percentageComplete ?? 0}%`;
   const positionLabel = preview?.globalChunkIndex ? 'Resume at %' : 'Start at %';
-  const swipeStartRef = useRef<SwipeSample | null>(null);
-
-  async function handleSwipe(direction: 'previous' | 'next') {
-    if (busy || !preview) {
-      return;
-    }
-
-    if (direction === 'previous') {
-      await onPreviousChunk();
-      return;
-    }
-
-    await onNextChunk();
-  }
-
-  function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
-    const touch = event.changedTouches[0];
-    if (!touch) {
-      return;
-    }
-
-    swipeStartRef.current = {x: touch.clientX, y: touch.clientY};
-  }
-
-  function handleTouchEnd(event: React.TouchEvent<HTMLDivElement>) {
-    const touch = event.changedTouches[0];
-    const swipeStart = swipeStartRef.current;
-    swipeStartRef.current = null;
-
-    if (!touch) {
-      return;
-    }
-
-    const direction = getSwipeDirection(swipeStart, {x: touch.clientX, y: touch.clientY});
-    if (!direction) {
-      return;
-    }
-
-    void handleSwipe(direction);
-  }
 
   return (
     <article className="panel panel--preview">
@@ -113,13 +70,27 @@ export function PreviewCard({
             </div>
           </div>
 
-          <div
-            className="teleprompter-preview"
-            onTouchEnd={handleTouchEnd}
-            onTouchStart={handleTouchStart}
-          >
+          <div className="teleprompter-preview teleprompter-preview--interactive">
+            <button
+              aria-label="Previous chunk"
+              className="teleprompter-preview__edge teleprompter-preview__edge--left"
+              disabled={busy || !preview}
+              onClick={() => void onPreviousChunk()}
+              type="button"
+            >
+              <span>Previous</span>
+            </button>
             <p>{preview.currentChunk || 'No chunk ready yet.'}</p>
-            <span className="teleprompter-preview__hint">Swipe left/right on the text to move between chunks.</span>
+            <button
+              aria-label="Next chunk"
+              className="teleprompter-preview__edge teleprompter-preview__edge--right"
+              disabled={busy || !preview}
+              onClick={() => void onNextChunk()}
+              type="button"
+            >
+              <span>Next</span>
+            </button>
+            <span className="teleprompter-preview__hint">Tap the left or right edge of the text window to move between chunks.</span>
           </div>
         </>
       ) : (

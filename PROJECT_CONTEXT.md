@@ -241,21 +241,23 @@ Observed request:
 - User wants to navigate chunk pages without looking down at the phone buttons
 - `Previous` and `Next` buttons are hard to use blind while trying to read the HUD
 
-Mitigation applied:
-- Added left/right swipe navigation directly on the preview text area
-- Swipe left advances to the next chunk
-- Swipe right rewinds to the previous chunk
-- Kept existing buttons in place as a fallback
-- Added a small hint inside the preview surface
+Iteration history:
+- First attempt used left/right swipe recognition on the preview text area
+- User reported the swipes did not work reliably in the phone webview
+- Interaction model was then changed to direct left/right edge taps on the preview window
+
+Current mitigation:
+- Tap left edge of preview window: previous chunk
+- Tap right edge of preview window: next chunk
+- Existing buttons remain as fallback
+- Preview hint text now teaches edge-tap behavior instead of swipe behavior
 
 Files changed:
 - `cloud/packages/apps/g1-teleprompter/src/webview/components/PreviewCard.tsx`
-- `cloud/packages/apps/g1-teleprompter/src/webview/components/swipe-navigation.ts`
-- `cloud/packages/apps/g1-teleprompter/src/webview/components/swipe-navigation.test.ts`
 - `cloud/packages/apps/g1-teleprompter/src/webview/globals.css`
 
 Verification completed locally:
-- `bun test src/webview/components/swipe-navigation.test.ts src/webview/components/Dashboard.test.tsx src/webview/components/SettingsPanel.test.tsx src/webview/components/settings-sync.test.ts src/webview/html.test.ts`
+- `bun test src/webview/components/Dashboard.test.tsx src/webview/components/SettingsPanel.test.tsx src/webview/components/settings-sync.test.ts src/webview/html.test.ts`
 - `bun x tsc --noEmit`
 
 ## Current Hosted Status
@@ -269,7 +271,7 @@ As of the latest meaningful session:
 - Another follow-up memory reduction is prepared to remove extra byte copies during base64 decode and EPUB/PDF handoff before the next hosted ebook retry
 - A follow-up UI stability fix is prepared to reduce flashing controls in the phone/glasses webview during background polling
 - A follow-up responsive layout fix is prepared to keep the dashboard inside the iPhone MentraOS window without awkward horizontal wandering
-- A follow-up interaction improvement is prepared so the preview text itself supports swipe-based chunk navigation
+- A follow-up interaction improvement is prepared so the preview text itself supports left/right edge-tap chunk navigation
 
 Important note:
 - If MentraOS still shows a white screen, first verify whether Render has finished deploying commit `590a69f89`
