@@ -251,6 +251,9 @@ Current mitigation:
 - Tap right edge of preview window: next chunk
 - Existing buttons remain as fallback
 - Preview hint text now teaches edge-tap behavior instead of swipe behavior
+- Follow-up usability improvement:
+  - enlarged the preview window itself
+  - widened the left/right edge tap zones, especially on phone-sized screens
 
 Files changed:
 - `cloud/packages/apps/g1-teleprompter/src/webview/components/PreviewCard.tsx`
