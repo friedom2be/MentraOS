@@ -29,7 +29,8 @@
     "ngrok:isaiah": "ngrok http --url=isaiah.augmentos.cloud 0.0.0.0:8002",
     "ngrok:isaiah2": "ngrok http --url=isaiah.mentra.glass 8002",
     "ngrok:israelov": "ngrok http --url=israelovpuddle.ngrok.app 8002",
-    "captions": "bun run --cwd packages/apps/captions/ start"
+    "captions": "bun run --cwd packages/apps/captions/ start",
+    "g1-teleprompter": "bun run --cwd packages/apps/g1-teleprompter start"
   },
   "dependencies": {
     "@langchain/anthropic": "^0.3.13",

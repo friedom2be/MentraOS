@@ -1,0 +1,12 @@
+.git
+.DS_Store
+**/node_modules
+**/.env
+**/.env.*
+**/dist
+**/coverage
+**/.next
+**/.turbo
+**/*.log
+docs/superpowers/
+cloud/packages/apps/g1-teleprompter/teleprompter.sqlite

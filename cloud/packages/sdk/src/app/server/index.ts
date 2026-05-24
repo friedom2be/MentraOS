@@ -158,7 +158,7 @@ export class AppServer {
 
     // Initialize Express app
     this.app = express();
-    this.app.use(express.json());
+    this.app.use(express.json({ limit: "25mb" }));
 
     const cookieParser = require("cookie-parser");
     this.app.use(

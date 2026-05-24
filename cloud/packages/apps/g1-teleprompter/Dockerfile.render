@@ -1,0 +1,22 @@
+FROM oven/bun:1.3.9
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app/cloud
+
+COPY cloud/package.json ./
+COPY cloud/bun.lock ./
+COPY cloud/tsconfig*.json ./
+COPY cloud/packages ./packages
+
+RUN bun install --no-link --ignore-scripts
+RUN bun run build
+RUN bun run --cwd packages/apps/g1-teleprompter build:webview
+
+WORKDIR /app/cloud/packages/apps/g1-teleprompter
+
+ENV NODE_ENV=production
+
+EXPOSE 10000
+
+CMD ["bun", "src/index.ts"]
