@@ -47,7 +47,95 @@ describe('RemoteModeOverlay', () => {
     expect(html).toContain('5 / 8');
     expect(html).toContain('50%');
     expect(html).toContain('Paused');
+    expect(html).toContain('Keep screen on');
+    expect(html).toContain('Keep phone screen on for continuous playback.');
     expect(html).not.toContain('This text should stay off the remote screen.');
+  });
+
+  test('shows Screen awake when Wake Lock is acquired and falls back to Keep screen on otherwise', async () => {
+    const successDom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
+      url: 'http://localhost',
+    });
+    const successContainer = successDom.window.document.getElementById('root');
+    if (!successContainer) {
+      throw new Error('Success test container not found');
+    }
+
+    installDomGlobals(successDom, {
+      wakeLock: {
+        request: (async () =>
+          ({
+            released: false,
+            release: async () => {},
+          })) as () => Promise<unknown>,
+      },
+    });
+
+    let successRoot: Root | null = null;
+
+    await act(async () => {
+      successRoot = createRoot(successContainer);
+      successRoot.render(
+        <RemoteModeOverlay
+          busy={false}
+          isPlaying={true}
+          onClose={() => {}}
+          onNextChunk={async () => {}}
+          onPause={async () => {}}
+          onPreviousChunk={async () => {}}
+          onResume={async () => {}}
+          preview={preview}
+          title="Wake Lock Script"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(successDom.window.document.querySelector('[data-testid="remote-wake-lock-status"]')?.textContent).toBe(
+      'Screen awake',
+    );
+
+    await act(async () => {
+      successRoot?.unmount();
+    });
+
+    const fallbackDom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
+      url: 'http://localhost',
+    });
+    const fallbackContainer = fallbackDom.window.document.getElementById('root');
+    if (!fallbackContainer) {
+      throw new Error('Fallback test container not found');
+    }
+
+    installDomGlobals(fallbackDom);
+
+    let fallbackRoot: Root | null = null;
+
+    await act(async () => {
+      fallbackRoot = createRoot(fallbackContainer);
+      fallbackRoot.render(
+        <RemoteModeOverlay
+          busy={false}
+          isPlaying={false}
+          onClose={() => {}}
+          onNextChunk={async () => {}}
+          onPause={async () => {}}
+          onPreviousChunk={async () => {}}
+          onResume={async () => {}}
+          preview={preview}
+          title="Fallback Script"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(fallbackDom.window.document.querySelector('[data-testid="remote-wake-lock-status"]')?.textContent).toBe(
+      'Keep screen on',
+    );
+
+    await act(async () => {
+      fallbackRoot?.unmount();
+    });
   });
 
   test('maps left, center, and right taps to previous, play/pause, and next actions', async () => {
@@ -120,12 +208,18 @@ describe('RemoteModeOverlay', () => {
   });
 });
 
-function installDomGlobals(dom: {window: Window & typeof globalThis}) {
+function installDomGlobals(
+  dom: {window: Window & typeof globalThis},
+  navigatorOverrides?: Record<string, unknown>,
+) {
   globalThis.window = dom.window as unknown as Window & typeof globalThis;
   globalThis.document = dom.window.document;
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
-    value: dom.window.navigator,
+    value: {
+      ...dom.window.navigator,
+      ...navigatorOverrides,
+    },
   });
   globalThis.HTMLElement = dom.window.HTMLElement;
   globalThis.HTMLButtonElement = dom.window.HTMLButtonElement;

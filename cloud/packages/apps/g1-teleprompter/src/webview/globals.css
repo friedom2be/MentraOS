@@ -346,6 +346,29 @@ h2 {
   gap: 12px;
 }
 
+.remote-mode__helper {
+  display: grid;
+  gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.remote-mode__helper strong {
+  color: #f7ffd0;
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.remote-mode__helper p {
+  margin: 0;
+  color: rgba(247, 248, 239, 0.74);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
 .remote-mode__status h2 {
   font-size: clamp(1.5rem, 6vw, 2.2rem);
   line-height: 1.02;

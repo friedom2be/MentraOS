@@ -504,6 +504,39 @@ Verification completed locally:
 - `bun x tsc --noEmit`
 - `bun run build.ts`
 
+### 10. Remote Mode screen-lock limitation and wake-lock guidance
+
+Real-device behavior confirmed:
+- Remote Mode navigation works while the iPhone screen is on
+- Auto-advance works while the iPhone screen is on
+- When the iPhone screen locks or turns off, playback behaves paused and no longer advances
+- Controls resume once the phone screen is back on
+
+Architecture conclusion:
+- Auto-advance is already session-driven in `ControlManager`, not webview-driven
+- The likely limitation is that the live MentraOS/iPhone `AppSession` becomes suspended or inactive when the phone locks
+- This means the practical workaround is to keep the phone screen awake during continuous playback
+
+UI mitigation added:
+- Remote Mode now surfaces wake-lock status instead of failing silently
+- Visible statuses:
+  - `Screen awake`
+  - `Keep screen on`
+  - `Reconnecting screen awake...` when retrying after visibility changes
+- Remote Mode also shows:
+  - `Keep phone screen on for continuous playback.`
+- No playback logic was changed
+
+Files involved:
+- `cloud/packages/apps/g1-teleprompter/src/webview/components/RemoteModeOverlay.tsx`
+- `cloud/packages/apps/g1-teleprompter/src/webview/components/RemoteModeOverlay.test.tsx`
+- `cloud/packages/apps/g1-teleprompter/src/webview/globals.css`
+
+Verification completed locally:
+- `bun test src`
+- `bun x tsc --noEmit`
+- `bun run build.ts`
+
 ## Important Repo State Notes
 
 Known unrelated or intentionally uncommitted items:

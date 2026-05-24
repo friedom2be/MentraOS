@@ -1,4 +1,4 @@
-import {useEffect, useRef} from 'react';
+import {useEffect, useRef, useState} from 'react';
 
 import type {PreviewState} from '../../domain/types';
 import {requestRemoteWakeLock, triggerRemoteHaptic, type RemoteWakeLockSentinel} from '../remote-device';
@@ -27,6 +27,7 @@ export function RemoteModeOverlay({
   onResume,
 }: RemoteModeOverlayProps) {
   const wakeLockRef = useRef<RemoteWakeLockSentinel | null>(null);
+  const [wakeLockStatus, setWakeLockStatus] = useState<'acquired' | 'unavailable' | 'retrying'>('unavailable');
 
   useEffect(() => {
     let canceled = false;
@@ -39,10 +40,12 @@ export function RemoteModeOverlay({
       }
 
       wakeLockRef.current = nextWakeLock;
+      setWakeLockStatus(nextWakeLock ? 'acquired' : 'unavailable');
     }
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && !wakeLockRef.current) {
+        setWakeLockStatus('retrying');
         void acquireWakeLock();
       }
     };
@@ -67,6 +70,12 @@ export function RemoteModeOverlay({
   const statusLabel = isPlaying ? 'Playing' : 'Paused';
   const positionLabel = preview ? `${preview.globalChunkIndex + 1} / ${preview.totalChunks}` : '0 / 0';
   const percentageLabel = `${preview?.percentageComplete ?? 0}%`;
+  const wakeLockLabel =
+    wakeLockStatus === 'acquired'
+      ? 'Screen awake'
+      : wakeLockStatus === 'retrying'
+        ? 'Reconnecting screen awake...'
+        : 'Keep screen on';
 
   return (
     <section aria-label="Remote Mode" className="remote-mode" role="dialog">
@@ -79,6 +88,10 @@ export function RemoteModeOverlay({
 
       <div className="remote-mode__status" data-testid="remote-status">
         <h2>{title}</h2>
+        <div className="remote-mode__helper">
+          <strong data-testid="remote-wake-lock-status">{wakeLockLabel}</strong>
+          <p>Keep phone screen on for continuous playback.</p>
+        </div>
         <div className="remote-mode__metrics">
           <div>
             <span>Chunk</span>
