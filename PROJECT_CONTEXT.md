@@ -176,6 +176,46 @@ Verification completed locally for Remote Mode work:
 - `/Users/friedom/.bun/bin/bun x tsc --noEmit`
 - `/Users/friedom/.bun/bin/bun run build.ts`
 
+### Settings save regression after Remote Mode deployment
+
+Observed in real-device testing:
+- Remote Mode itself worked on iPhone / MentraOS
+- Left/right navigation worked
+- Center play resumed at the saved/default 120 WPM
+- After exiting Remote Mode, changing `Scroll speed (WPM)` would not persist reliably
+- Dashboard buttons appeared to flash repeatedly
+- `Finish` and reloading content did not stop the flashing
+
+Root cause:
+- The problem was in the phone settings form, not the backend settings route
+- `src/webview/components/SettingsPanel.tsx` still had an autosave `useEffect` that fired 450ms after any unsaved change
+- For WPM editing, that meant partial edits could trigger background save attempts while the user was still interacting with the form
+- Every autosave used the app-wide `busy` state from `useAppState`, which disabled and re-enabled dashboard buttons repeatedly
+- That global busy churn is the most plausible cause of the flashing controls seen on-device
+- The settings panel also needed to avoid resyncing from saved profile values while the user had an active local draft in progress
+
+Fix applied:
+- Removed the timed autosave effect from `SettingsPanel`
+- Restored explicit save-only behavior through the existing `Save settings` submit path
+- Added local `isEditing` tracking so saved profile values do not overwrite an in-progress draft
+- Kept saved-profile resync behavior when the user is not actively editing
+- No backend/API route changes were required
+- No playback/progress/ingestion changes were required
+
+Tests added/updated:
+- `src/webview/components/SettingsPanel.test.tsx`
+  - confirms the panel does not autosave while editing
+  - confirms local edits survive a parent rerender when the saved profile did not change
+- Existing Remote Mode tests remained in place and passing
+
+Verification completed locally after the fix:
+- `/Users/friedom/.bun/bin/bun test src`
+- `/Users/friedom/.bun/bin/bun x tsc --noEmit`
+- `/Users/friedom/.bun/bin/bun run build.ts`
+
+Operational note:
+- This fix affects the deployed phone webview bundle, so a Render redeploy is required before retesting on-device
+
 ## Debugging History
 
 ### 1. Temporary tunnel instability

@@ -22,15 +22,20 @@ export function SettingsPanel({busy, profile, onUpdateSettings}: SettingsPanelPr
   const [summarizeEpubs, setSummarizeEpubs] = useState(profile.summarizeEpubs);
   const [summarizePdfs, setSummarizePdfs] = useState(profile.summarizePdfs);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const syncKey = getSettingsSyncKey(profile);
 
   useEffect(() => {
+    if (isEditing) {
+      return;
+    }
+
     setScrollSpeed(String(profile.scrollSpeed));
     setSummarizeArticles(profile.summarizeArticles);
     setSummarizeEpubs(profile.summarizeEpubs);
     setSummarizePdfs(profile.summarizePdfs);
     setSaveMessage(null);
-  }, [syncKey]);
+  }, [isEditing, profile.scrollSpeed, profile.summarizeArticles, profile.summarizeEpubs, profile.summarizePdfs, syncKey]);
 
   const hasUnsavedChanges =
     Number(scrollSpeed) !== profile.scrollSpeed ||
@@ -38,30 +43,9 @@ export function SettingsPanel({busy, profile, onUpdateSettings}: SettingsPanelPr
     summarizeEpubs !== profile.summarizeEpubs ||
     summarizePdfs !== profile.summarizePdfs;
 
-  useEffect(() => {
-    if (!hasUnsavedChanges || busy) {
-      return;
-    }
-
-    setSaveMessage('Saving...');
-
-    const timeoutId = window.setTimeout(() => {
-      void onUpdateSettings({
-        scrollSpeed: Number(scrollSpeed),
-        summarizeArticles,
-        summarizeEpubs,
-        summarizePdfs,
-      });
-    }, 450);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [busy, hasUnsavedChanges, onUpdateSettings, scrollSpeed, summarizeArticles, summarizeEpubs, summarizePdfs]);
-
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaveMessage(null);
+    setSaveMessage('Saving...');
 
     await onUpdateSettings({
       scrollSpeed: Number(scrollSpeed),
@@ -70,6 +54,7 @@ export function SettingsPanel({busy, profile, onUpdateSettings}: SettingsPanelPr
       summarizePdfs,
     });
 
+    setIsEditing(false);
     setSaveMessage('Settings saved');
   }
 
@@ -92,7 +77,11 @@ export function SettingsPanel({busy, profile, onUpdateSettings}: SettingsPanelPr
             inputMode="numeric"
             max={MAX_SCROLL_SPEED}
             min={MIN_SCROLL_SPEED}
-            onChange={(event) => setScrollSpeed(event.target.value)}
+            onChange={(event) => {
+              setIsEditing(true);
+              setSaveMessage(null);
+              setScrollSpeed(event.target.value);
+            }}
             type="number"
             value={scrollSpeed}
           />
@@ -102,17 +91,29 @@ export function SettingsPanel({busy, profile, onUpdateSettings}: SettingsPanelPr
           <Toggle
             checked={summarizeArticles}
             label="Summarize URL articles"
-            onChange={(checked) => setSummarizeArticles(checked)}
+            onChange={(checked) => {
+              setIsEditing(true);
+              setSaveMessage(null);
+              setSummarizeArticles(checked);
+            }}
           />
           <Toggle
             checked={summarizeEpubs}
             label="Summarize EPUBs"
-            onChange={(checked) => setSummarizeEpubs(checked)}
+            onChange={(checked) => {
+              setIsEditing(true);
+              setSaveMessage(null);
+              setSummarizeEpubs(checked);
+            }}
           />
           <Toggle
             checked={summarizePdfs}
             label="Summarize PDFs"
-            onChange={(checked) => setSummarizePdfs(checked)}
+            onChange={(checked) => {
+              setIsEditing(true);
+              setSaveMessage(null);
+              setSummarizePdfs(checked);
+            }}
           />
         </div>
 
