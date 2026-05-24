@@ -34,4 +34,20 @@ describe('Dashboard', () => {
     expect(html).toContain('Welcome to Mentra HUD Reader');
     expect(html).toContain('Load a script to start reading on your HUD.');
   });
+
+  test('renders a Remote Mode toggle from the dashboard', () => {
+    const html = renderToStaticMarkup(
+      <Dashboard
+        appState={appState}
+        busy={false}
+        error={null}
+        onLoadScript={async () => {}}
+        onRefreshState={async () => {}}
+        onSendControl={async () => {}}
+        onUpdateSettings={async () => {}}
+      />,
+    );
+
+    expect(html).toContain('Remote Mode');
+  });
 });

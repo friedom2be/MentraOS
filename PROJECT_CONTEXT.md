@@ -59,6 +59,59 @@ Product decisions made during testing:
 - Remove visible volume-button stepping option from settings
 - Prefer direct manual chunk stepping in UI over hardware-button dependence
 
+### 8. API routes refactor with preserved endpoint behavior
+
+Observed need:
+- `src/api/routes.ts` had grown into a single file containing:
+  - route registration
+  - setup flow
+  - load route
+  - state/control/voice routes
+  - settings route
+  - health route
+  - app-state response shaping
+  - generic route error handling
+
+Refactor completed:
+- Split `src/api/routes.ts` into smaller route modules while preserving endpoint behavior:
+  - `src/api/routes/health.ts`
+  - `src/api/routes/setup.ts`
+  - `src/api/routes/load.ts`
+  - `src/api/routes/state.ts`
+  - `src/api/routes/settings.ts`
+  - `src/api/routes/state-response.ts`
+  - `src/api/routes/utils.ts`
+  - `src/api/routes/types.ts`
+- Kept `src/api/routes.ts` as the composition layer that builds the full route map
+
+Behavioral constraints preserved:
+- No auth behavior change
+- No percentage/progress behavior change
+- No playback control semantic change
+- No Render or Docker change
+- No runtime endpoint name or method change
+
+Follow-up issue found during verification:
+- `bun test src` passed immediately after the split
+- `bun x tsc --noEmit` failed because the extracted route typing widened handlers to optional `GET?` / `POST?`
+- That caused `src/api/routes.test.ts` calls like `routes['/setup/init'].POST(...)` to become compile-time possibly-undefined
+
+Typing fix applied:
+- Replaced the generic optional route-definition type with an endpoint-specific `AppRoutes` map
+- Each known route now has a required handler type:
+  - `GET` required where the endpoint is GET-only
+  - `POST` required where the endpoint is POST-only
+- Updated extracted route builders to return `Pick<AppRoutes, ...>` so `createRoutes()` retains the same compile-time guarantees as before the refactor
+
+Verification completed successfully after the typing fix:
+- `/Users/friedom/.bun/bin/bun test src`
+- `/Users/friedom/.bun/bin/bun x tsc --noEmit`
+- `/Users/friedom/.bun/bin/bun run build.ts`
+
+Outcome:
+- The API route refactor is now considered safe to keep
+- No revert required
+
 ## Important Technical Decisions
 
 ### App identity
@@ -86,6 +139,42 @@ Because the active G1 path reported no usable hardware button support in session
 - `Next`
 
 These were moved onto a dedicated row for faster access and better touch ergonomics.
+
+### Remote Mode UX
+
+New phone-webview interaction model added:
+- `Remote Mode` is now available from the dashboard as a phone-first blind remote surface
+- It intentionally hides the full script preview text while active because the text is already visible on the glasses HUD
+- The Remote Mode screen is a minimal black overlay with:
+  - script title
+  - current chunk / total chunks
+  - percentage complete
+  - local play/pause status indicator
+
+Remote Mode control mapping:
+- left tap zone: previous chunk
+- center tap zone: play / pause
+- right tap zone: next chunk
+
+Important implementation constraint:
+- Volume-button navigation was intentionally not revisited because it was not accessible/reliable through the MentraOS iPhone webview path
+- Existing `PreviewCard` edge-tap navigation and `Previous` / `Next` buttons remain in place as the normal-mode fallback
+
+Platform feature handling:
+- `navigator.vibrate` is attempted for very short success feedback after remote taps
+- If unsupported or blocked, it fails silently
+- Wake Lock is attempted only while Remote Mode is mounted
+- If unsupported or blocked, it fails silently
+
+Important caveat:
+- The current app state API still does not expose persisted runtime playback status to the webview
+- To avoid backend/API changes, Remote Mode currently tracks play/pause state locally in the dashboard based on the user’s remote actions
+- That is sufficient for the new phone remote workflow, but it is not a guaranteed source of truth if playback is changed elsewhere
+
+Verification completed locally for Remote Mode work:
+- `/Users/friedom/.bun/bin/bun test src`
+- `/Users/friedom/.bun/bin/bun x tsc --noEmit`
+- `/Users/friedom/.bun/bin/bun run build.ts`
 
 ## Debugging History
 

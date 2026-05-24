@@ -1,9 +1,10 @@
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 
 import type {ControlAction} from '../../api/request-parsing';
 import type {AppStateResponse} from '../../domain/types';
 import type {LoadRequestPayload} from '../hooks/useAppState';
 import {PreviewCard} from './PreviewCard';
+import {RemoteModeOverlay} from './RemoteModeOverlay';
 import {SettingsPanel} from './SettingsPanel';
 
 interface DashboardProps {
@@ -41,8 +42,18 @@ export function Dashboard({
   const [shouldSummarize, setShouldSummarize] = useState(false);
   const [percentageInput, setPercentageInput] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [isRemoteMode, setIsRemoteMode] = useState(false);
+  const [isRemotePlaying, setIsRemotePlaying] = useState(false);
 
   const percentageValue = parsePercentageInput(percentageInput);
+  const remoteTitle = appState.activeScript?.sourceTitle || 'Mentra HUD Reader';
+
+  useEffect(() => {
+    if (!appState.preview) {
+      setIsRemoteMode(false);
+      setIsRemotePlaying(false);
+    }
+  }, [appState.preview]);
 
   async function handleLoad(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,6 +72,7 @@ export function Dashboard({
             text,
             shouldSummarize,
           });
+          setIsRemotePlaying(false);
           break;
         case 'url':
           if (!url.trim()) {
@@ -72,6 +84,7 @@ export function Dashboard({
             url: url.trim(),
             shouldSummarize,
           });
+          setIsRemotePlaying(false);
           break;
         case 'file':
           if (!file) {
@@ -84,6 +97,7 @@ export function Dashboard({
             base64Data: await fileToBase64(file),
             shouldSummarize,
           });
+          setIsRemotePlaying(false);
           break;
       }
     } catch (nextError) {
@@ -107,10 +121,46 @@ export function Dashboard({
     }
 
     await onSendControl('resume');
+    setIsRemotePlaying(true);
+  }
+
+  async function handlePause() {
+    await onSendControl('pause');
+    setIsRemotePlaying(false);
+  }
+
+  async function handleRestart() {
+    await onSendControl('restart');
+    setIsRemotePlaying(false);
+  }
+
+  async function handleRepeat() {
+    await onSendControl('repeat');
+    setIsRemotePlaying(false);
+  }
+
+  async function handleFinish() {
+    await onSendControl('finished');
+    setIsRemotePlaying(false);
+    setIsRemoteMode(false);
   }
 
   return (
     <section className="dashboard-shell">
+      {isRemoteMode ? (
+        <RemoteModeOverlay
+          busy={busy}
+          isPlaying={isRemotePlaying}
+          onClose={() => setIsRemoteMode(false)}
+          onNextChunk={async () => await onSendControl('advance_chunk')}
+          onPause={handlePause}
+          onPreviousChunk={async () => await onSendControl('rewind_chunk')}
+          onResume={handleResume}
+          preview={appState.preview}
+          title={remoteTitle}
+        />
+      ) : null}
+
       <header className="dashboard-hero panel panel--hero">
         <div>
           <p className="eyebrow">Mentra HUD Reader</p>
@@ -122,6 +172,14 @@ export function Dashboard({
         </div>
 
         <div className="hero-metrics">
+          <button
+            className="button button--ghost button--remote"
+            disabled={busy || !appState.preview}
+            onClick={() => setIsRemoteMode(true)}
+            type="button"
+          >
+            Remote Mode
+          </button>
           <div className="hero-metric">
             <span>Progress</span>
             <strong>{appState.preview?.percentageComplete ?? 0}%</strong>
@@ -142,14 +200,14 @@ export function Dashboard({
           <PreviewCard
             busy={busy}
             onChangePercentage={setPercentageInput}
-            onFinish={async () => await onSendControl('finished')}
+            onFinish={handleFinish}
             onJumpToPercentage={handleJumpToPercentage}
             onNextChunk={async () => await onSendControl('advance_chunk')}
             onNextChapter={async () => await onSendControl('next_chapter')}
-            onPause={async () => await onSendControl('pause')}
+            onPause={handlePause}
             onPreviousChunk={async () => await onSendControl('rewind_chunk')}
-            onRepeat={async () => await onSendControl('repeat')}
-            onRestart={async () => await onSendControl('restart')}
+            onRepeat={handleRepeat}
+            onRestart={handleRestart}
             onResume={handleResume}
             percentageInput={percentageInput}
             preview={appState.preview}
