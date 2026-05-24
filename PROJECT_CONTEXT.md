@@ -254,6 +254,7 @@ Current mitigation:
 - Follow-up usability improvement:
   - enlarged the preview window itself
   - widened the left/right edge tap zones, especially on phone-sized screens
+  - enlarged both again after real-device testing confirmed the pattern worked and the goal became maximizing blind tap confidence
 
 Files changed:
 - `cloud/packages/apps/g1-teleprompter/src/webview/components/PreviewCard.tsx`

@@ -226,7 +226,7 @@ h2 {
 }
 
 .teleprompter-preview {
-  min-height: 280px;
+  min-height: 340px;
   margin-top: 18px;
   border-radius: 24px;
   border: 1px solid var(--line-strong);
@@ -262,7 +262,7 @@ h2 {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 30%;
+  width: 36%;
   border: 0;
   background: transparent;
   color: rgba(247, 248, 239, 0.72);
@@ -561,11 +561,11 @@ h2 {
   }
 
   .teleprompter-preview {
-    min-height: 260px;
-    padding: 20px 18px;
+    min-height: 320px;
+    padding: 22px 18px;
   }
 
   .teleprompter-preview__edge {
-    width: 36%;
+    width: 42%;
   }
 }
