@@ -5,6 +5,7 @@ import type {ControlAction, SettingsRequest} from '../../api/request-parsing';
 import type {AppStateResponse} from '../../domain/types';
 
 const TOKEN_STORAGE_KEY = 'g1-teleprompter.setup-token';
+export const SETTINGS_API_PATH = '/api/settings';
 
 export type LoadRequestPayload =
   | {
@@ -203,9 +204,17 @@ export function useAppState() {
 
   async function updateSettings(settings: SettingsRequest) {
     await runWithBusy(async () => {
-      console.info('[g1-teleprompter] /settings request payload', settings);
-      const nextState = await requestJson<AppStateResponse>('/settings', {method: 'POST', auth: true, body: settings}, token);
-      setAppState(nextState);
+      console.info(`[g1-teleprompter] ${SETTINGS_API_PATH} request payload`, settings);
+      try {
+        const nextState = await requestJson<AppStateResponse>(
+          SETTINGS_API_PATH,
+          {method: 'POST', auth: true, body: settings},
+          token,
+        );
+        setAppState(nextState);
+      } catch (nextError) {
+        throw new Error(`Settings save failed: ${toMessage(nextError)}`);
+      }
     });
   }
 

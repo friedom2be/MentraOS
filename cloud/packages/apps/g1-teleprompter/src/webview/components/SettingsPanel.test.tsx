@@ -58,7 +58,7 @@ describe('SettingsPanel', () => {
     expect(normalizeScrollSpeed('12.5')).toBeNull();
   });
 
-  test('builds the exact settings payload field names expected by /settings', () => {
+  test('builds the exact settings payload field names expected by /api/settings', () => {
     expect(
       buildSettingsPayload({
         scrollSpeed: '180',

@@ -23,6 +23,7 @@ export type PostRouteDefinition = {
 
 export interface AppRoutes {
   '/api/health': GetRouteDefinition;
+  '/api/settings': PostRouteDefinition;
   '/setup/init': PostRouteDefinition;
   '/setup/verify': PostRouteDefinition;
   '/setup/reset': PostRouteDefinition;
@@ -30,5 +31,4 @@ export interface AppRoutes {
   '/state': GetRouteDefinition;
   '/state/control': PostRouteDefinition;
   '/voice-command': PostRouteDefinition;
-  '/settings': PostRouteDefinition;
 }

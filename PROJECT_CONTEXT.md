@@ -467,6 +467,43 @@ Verification completed locally:
 - `bun x tsc --noEmit`
 - `bun run build.ts`
 
+### 9. Settings endpoint collision with MentraOS webview/platform behavior
+
+Observed after deploy:
+- Real-device settings save no longer returned the teleprompter validation error
+- Instead, the phone webview showed:
+  - `{"status":"error","message":"Missing userId or settings array in request body"}`
+
+Interpretation:
+- That error format does not match the app's own `/settings` validation responses
+- It strongly suggests the MentraOS phone webview or platform layer reserves or intercepts bare `POST /settings`
+- Our custom settings endpoint path was therefore colliding with platform behavior instead of reliably reaching the app route
+
+Fix applied:
+- Renamed the app-specific settings endpoint from `POST /settings` to `POST /api/settings`
+- Updated the frontend `useAppState` settings save path to call `/api/settings`
+- Added endpoint-specific error context:
+  - `Settings save failed: ...`
+- Kept the backend validation contract unchanged for the payload fields:
+  - `scrollSpeed`
+  - `summarizeArticles`
+  - `summarizeEpubs`
+  - `summarizePdfs`
+- Chose not to keep the old `/settings` route to avoid reintroducing the collision risk
+
+Files involved:
+- `cloud/packages/apps/g1-teleprompter/src/api/routes/types.ts`
+- `cloud/packages/apps/g1-teleprompter/src/api/routes/settings.ts`
+- `cloud/packages/apps/g1-teleprompter/src/api/routes.test.ts`
+- `cloud/packages/apps/g1-teleprompter/src/webview/hooks/useAppState.ts`
+- `cloud/packages/apps/g1-teleprompter/src/webview/hooks/useAppState.test.ts`
+- `cloud/packages/apps/g1-teleprompter/src/webview/components/SettingsPanel.test.tsx`
+
+Verification completed locally:
+- `bun test src`
+- `bun x tsc --noEmit`
+- `bun run build.ts`
+
 ## Important Repo State Notes
 
 Known unrelated or intentionally uncommitted items:

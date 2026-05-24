@@ -234,12 +234,12 @@ describe('routes', () => {
     expect(response.status).toBe(401);
   });
 
-  test('POST /settings persists toggle updates into profile state', async () => {
+  test('POST /api/settings persists toggle updates into profile state', async () => {
     const routes = createRoutes(createFakeDeps());
     const token = await initializeSetup(routes);
 
-    const response = await routes['/settings'].POST(
-      new Request('http://localhost/settings', {
+    const response = await routes['/api/settings'].POST(
+      new Request('http://localhost/api/settings', {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,
@@ -448,12 +448,12 @@ describe('routes', () => {
     expect(activeScript).toBeNull();
   });
 
-  test('POST /settings persists teleprompter preferences directly', async () => {
+  test('POST /api/settings persists teleprompter preferences directly', async () => {
     const routes = createRoutes(createFakeDeps());
     const token = await initializeSetup(routes);
 
-    const response = await routes['/settings'].POST(
-      new Request('http://localhost/settings', {
+    const response = await routes['/api/settings'].POST(
+      new Request('http://localhost/api/settings', {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,
@@ -474,12 +474,12 @@ describe('routes', () => {
     expect(body.profile.volumeButtonMode).toBe(true);
   });
 
-  test('POST /settings accepts high WPM values for faster teleprompter playback', async () => {
+  test('POST /api/settings accepts high WPM values for faster teleprompter playback', async () => {
     const routes = createRoutes(createFakeDeps());
     const token = await initializeSetup(routes);
 
-    const response = await routes['/settings'].POST(
-      new Request('http://localhost/settings', {
+    const response = await routes['/api/settings'].POST(
+      new Request('http://localhost/api/settings', {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,
@@ -496,12 +496,12 @@ describe('routes', () => {
     expect(body.profile.scrollSpeed).toBe(600);
   });
 
-  test('POST /settings rejects a null scrollSpeed with the backend validation message', async () => {
+  test('POST /api/settings rejects a null scrollSpeed with the backend validation message', async () => {
     const routes = createRoutes(createFakeDeps());
     const token = await initializeSetup(routes);
 
-    const response = await routes['/settings'].POST(
-      new Request('http://localhost/settings', {
+    const response = await routes['/api/settings'].POST(
+      new Request('http://localhost/api/settings', {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,

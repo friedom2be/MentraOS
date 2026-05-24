@@ -5,12 +5,14 @@ import {buildStateResponse} from './state-response';
 import type {AppRoutes, RouteDeps} from './types';
 import {handleRoute} from './utils';
 
-export function buildSettingsRoutes(deps: RouteDeps): Pick<AppRoutes, '/settings'> {
+const SETTINGS_ROUTE_PATH = '/api/settings';
+
+export function buildSettingsRoutes(deps: RouteDeps): Pick<AppRoutes, '/api/settings'> {
   return {
-    '/settings': {
+    '/api/settings': {
       POST: async (req: Request) =>
         await handleRoute(async () => {
-          console.info('[g1-teleprompter] /settings request received');
+          console.info(`[g1-teleprompter] ${SETTINGS_ROUTE_PATH} request received`);
           const profile = deps.profileRepository.getProfile();
           await requireBearerToken(req, profile.tokenHash);
           const rawBody = await readRawBody(req);
@@ -31,10 +33,10 @@ export function buildSettingsRoutes(deps: RouteDeps): Pick<AppRoutes, '/settings
             throw error;
           }
 
-          console.info('[g1-teleprompter] /settings parsed', settings);
+          console.info(`[g1-teleprompter] ${SETTINGS_ROUTE_PATH} parsed`, settings);
           const savedProfile = deps.profileRepository.saveProfile(settings);
           UserSession.syncAllFromPersistence();
-          console.info('[g1-teleprompter] /settings saved profile', savedProfile);
+          console.info(`[g1-teleprompter] ${SETTINGS_ROUTE_PATH} saved profile`, savedProfile);
           return Response.json(buildStateResponse(savedProfile, deps.scriptRepository.getActiveScript()));
         }),
     },
@@ -50,7 +52,7 @@ async function readRawBody(req: Request): Promise<string | null> {
 }
 
 function logRejectedSettingsRequest(rawBody: string | null, parsedBody: unknown, error: unknown) {
-  console.warn('[g1-teleprompter] /settings rejected', {
+  console.warn(`[g1-teleprompter] ${SETTINGS_ROUTE_PATH} rejected`, {
     rawBody: rawBody ? rawBody.slice(0, 500) : null,
     parsedBody: summarizeParsedBody(parsedBody),
     error: describeRouteError(error),
