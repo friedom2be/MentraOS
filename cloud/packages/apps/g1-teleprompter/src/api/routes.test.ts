@@ -496,6 +496,30 @@ describe('routes', () => {
     expect(body.profile.scrollSpeed).toBe(600);
   });
 
+  test('POST /settings rejects a null scrollSpeed with the backend validation message', async () => {
+    const routes = createRoutes(createFakeDeps());
+    const token = await initializeSetup(routes);
+
+    const response = await routes['/settings'].POST(
+      new Request('http://localhost/settings', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          scrollSpeed: null,
+          summarizeArticles: false,
+          summarizeEpubs: false,
+          summarizePdfs: false,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({error: 'scrollSpeed must be a number'});
+  });
+
   function createFakeDeps() {
     return {
       profileRepository: {

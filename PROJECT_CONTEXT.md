@@ -422,6 +422,51 @@ Open testing focus:
 - Re-test opening the app from MentraOS
 - Confirm the white-screen issue is resolved on actual device
 
+### 8. Settings 400 diagnostics on real device
+
+Observed regression after deploy:
+- Changing `Scroll speed (WPM)` still failed on real iPhone/MentraOS testing
+- Tapping `Save settings` returned `Request failed (400)`
+- Saved profile value remained at `120`
+
+What was verified:
+- `/settings` route wiring survived the API route refactor
+- Frontend payload field names still matched backend expectations:
+  - `scrollSpeed`
+  - `summarizeArticles`
+  - `summarizeEpubs`
+  - `summarizePdfs`
+- Polling skip logic in `useAppState` also survived
+
+Exact failing path:
+- Before the diagnostics fix, the frontend built the settings payload with:
+  - `scrollSpeed: Number(scrollSpeed)`
+  - summarize booleans
+- On the real phone webview, invalid or transient number-input state could produce `NaN`
+- `JSON.stringify` serializes `NaN` as `null`
+- Backend validation in `parseSettingsRequest()` rejects that with:
+  - `scrollSpeed must be a number`
+
+Diagnostics and mitigation added:
+- Frontend now normalizes and validates WPM before sending `/settings`
+- Invalid WPM is rejected locally instead of hitting the backend
+- `/settings` request payload is logged client-side for debugging
+- Rejected `/settings` requests are logged server-side with safe body/type summaries and no secrets
+- Frontend error handling now surfaces backend validation messages instead of only `Request failed (400)`
+
+Files involved:
+- `cloud/packages/apps/g1-teleprompter/src/webview/components/SettingsPanel.tsx`
+- `cloud/packages/apps/g1-teleprompter/src/webview/components/SettingsPanel.test.tsx`
+- `cloud/packages/apps/g1-teleprompter/src/webview/hooks/useAppState.ts`
+- `cloud/packages/apps/g1-teleprompter/src/webview/hooks/useAppState.test.ts`
+- `cloud/packages/apps/g1-teleprompter/src/api/routes/settings.ts`
+- `cloud/packages/apps/g1-teleprompter/src/api/routes.test.ts`
+
+Verification completed locally:
+- `bun test src`
+- `bun x tsc --noEmit`
+- `bun run build.ts`
+
 ## Important Repo State Notes
 
 Known unrelated or intentionally uncommitted items:

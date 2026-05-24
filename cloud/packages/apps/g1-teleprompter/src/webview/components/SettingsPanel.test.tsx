@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {JSDOM} from 'jsdom';
 
 import type {AppStateResponse} from '../../domain/types';
-import {SettingsPanel} from './SettingsPanel';
+import {buildSettingsPayload, normalizeScrollSpeed, SettingsPanel} from './SettingsPanel';
 
 const profile: AppStateResponse['profile'] = {
   setupComplete: true,
@@ -46,6 +46,37 @@ describe('SettingsPanel', () => {
     expect(html).toContain('600 WPM');
   });
 
+  test('normalizes valid WPM values and clamps out-of-range values', () => {
+    expect(normalizeScrollSpeed('180')).toBe(180);
+    expect(normalizeScrollSpeed('6000')).toBe(600);
+    expect(normalizeScrollSpeed('1')).toBe(60);
+  });
+
+  test('rejects invalid WPM input before submit', () => {
+    expect(normalizeScrollSpeed('')).toBeNull();
+    expect(normalizeScrollSpeed('abc')).toBeNull();
+    expect(normalizeScrollSpeed('12.5')).toBeNull();
+  });
+
+  test('builds the exact settings payload field names expected by /settings', () => {
+    expect(
+      buildSettingsPayload({
+        scrollSpeed: '180',
+        summarizeArticles: true,
+        summarizeEpubs: false,
+        summarizePdfs: true,
+      }),
+    ).toEqual({
+      error: null,
+      payload: {
+        scrollSpeed: 180,
+        summarizeArticles: true,
+        summarizeEpubs: false,
+        summarizePdfs: true,
+      },
+    });
+  });
+
   test('does not autosave while the user is still editing the WPM field', async () => {
     const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
       url: 'http://localhost',
@@ -65,7 +96,7 @@ describe('SettingsPanel', () => {
       root.render(<SettingsPanel busy={false} onUpdateSettings={onUpdateSettings} profile={profile} />);
     });
 
-    const input = dom.window.document.querySelector('input[type="number"]') as HTMLInputElement | null;
+    const input = dom.window.document.querySelector('input[type="text"]') as HTMLInputElement | null;
     expect(input).toBeTruthy();
 
     await act(async () => {

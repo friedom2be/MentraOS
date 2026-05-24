@@ -203,6 +203,7 @@ export function useAppState() {
 
   async function updateSettings(settings: SettingsRequest) {
     await runWithBusy(async () => {
+      console.info('[g1-teleprompter] /settings request payload', settings);
       const nextState = await requestJson<AppStateResponse>('/settings', {method: 'POST', auth: true, body: settings}, token);
       setAppState(nextState);
     });
@@ -278,14 +279,24 @@ async function requestJson<T = unknown>(path: string, options: RequestOptions, t
 }
 
 async function readErrorMessage(response: Response): Promise<string> {
+  const rawBody = await response.text();
+  return extractErrorMessage(response.status, rawBody);
+}
+
+export function extractErrorMessage(status: number, rawBody: string): string {
+  const trimmed = rawBody.trim();
+  if (!trimmed) {
+    return `Request failed (${status})`;
+  }
+
   try {
-    const body = (await response.json()) as {error?: string};
+    const body = JSON.parse(trimmed) as {error?: string};
     if (typeof body.error === 'string' && body.error) {
       return body.error;
     }
   } catch {}
 
-  return `Request failed (${response.status})`;
+  return trimmed || `Request failed (${status})`;
 }
 
 function persistToken(token: string | null) {
